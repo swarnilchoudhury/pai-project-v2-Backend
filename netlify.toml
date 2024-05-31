@@ -1,6 +1,8 @@
 [functions]
   external_node_modules = ["express"]
   node_bundler = "esbuild"
+[dev]
+  publish = "dist"
 [[redirects]]
   force = true
   from = "/api/*"
