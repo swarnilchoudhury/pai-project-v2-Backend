@@ -1,20 +1,16 @@
 {
-  "name": "pai-api",
+  "name": "pai-project-api",
   "version": "1.0.0",
-  "description": "",
+  "description": "It is used for API calling backend through express",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "netlify-lambda serve src",
-    "build": "netlify-lambda build src"
+    "build": "netlify deploy --prod"
   },
-  "keywords": [],
-  "author": "",
+  "author": "Swarnil",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
-    "netlify-cli": "^17.25.0",
-    "netlify-lambda": "^2.0.16",
+    "express": "^4.19.2",
     "serverless-http": "^3.2.0"
   }
 }
