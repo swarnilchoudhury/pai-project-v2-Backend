@@ -1,25 +1,42 @@
 const { admin, auth } = require("./credentials/firebaseCredentials");
+const config = require("../config/config.json")
+var jwt = require('jsonwebtoken');
+
+const fetchAuthToken = (req) => {
+
+  const authToken = req.headers.authorization?.split('Bearer ')[1];
+  try {
+    var decoded = jwt.verify(authToken, config.SecretKey);
+  }
+  catch{
+    return null;
+  }
+
+  return decoded;
+}
 
 const verifyIdToken = async (req, res, next) => {
-
   try {
+    if (req != null && req != undefined) {
 
-    const authTokenCookie = req.cookies.authToken;
+      const decoded = fetchAuthToken(req);
 
-    if (authTokenCookie != undefined && authTokenCookie != null
-        && authTokenCookie != '') 
-    {
-      await admin.auth().verifyIdToken(authTokenCookie);
-    }
-    else {
-      return res.status(401).json({ message: 'Unauthorized: No token provided' });
+      if (decoded) {
+        await admin.auth().verifyIdToken(decoded.authToken);
+      }
+      else {
+        return res.sendStatus(401);
+      }
+
     }
 
     next();
   }
   catch (error) {
-    return res.status(401).json({ message: 'Unauthorized: Invalid token' });
+    return res.sendStatus(401);
   }
 };
 
-module.exports = { verifyIdToken };
+
+
+module.exports = { verifyIdToken, fetchAuthToken };
