@@ -3,6 +3,7 @@ const serverless = require("serverless-http");
 const loginRouter = require("../../src/RoutePaths/login");
 const homeRouter = require("../../src/RoutePaths/Home");
 const verifyToken = require("../../src/RoutePaths/VerifyToken");
+const roleRouter = require("../../src/RoutePaths/Role");
 
 // Create an instance of the Express app
 const app = express();
@@ -14,7 +15,6 @@ app.use(express.json());
 const router = express.Router();
 
 app.use((req, res, next) => {
-
 
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, PUT");
@@ -37,6 +37,9 @@ app.use('/api/', homeRouter);
 
 //For verifyToken
 app.use('/api/', verifyToken);
+
+//For Roles related routes
+app.use("/api/", roleRouter)
 
 // Use the router to handle requests to the `/.netlify/functions/api` path
 app.use("/api/", router);

@@ -1,9 +1,11 @@
 const express = require('express');
-const router = express.Router();
 const { verifyIdToken } = require('../authMiddleware');
+const router = express.Router();
+
+router.use(verifyIdToken);
 
 //Home Page to Fetch Details
-router.post("/verifyToken", verifyIdToken, async (req, res) => {
+router.post("/verifyToken", async (req, res) => {
 
     try {
         res.sendStatus(200);

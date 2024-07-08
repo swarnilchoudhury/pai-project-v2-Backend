@@ -1,33 +1,44 @@
-const { admin, auth } = require("./credentials/firebaseCredentials");
-const config = require("../config/config.json")
-var jwt = require('jsonwebtoken');
-
-const fetchAuthToken = (req) => {
-
-  const authToken = req.headers.authorization?.split('Bearer ')[1];
-  try {
-    var decoded = jwt.verify(authToken, config.SecretKey);
-  }
-  catch{
-    return null;
-  }
-
-  return decoded;
-}
+const { admin } = require("./credentials/firebaseCredentials");
 
 const verifyIdToken = async (req, res, next) => {
   try {
     if (req != null && req != undefined) {
 
-      const decoded = fetchAuthToken(req);
+      const authToken = req.headers.authorization?.split('Bearer ')[1];
 
-      if (decoded) {
-        await admin.auth().verifyIdToken(decoded.authToken);
+      try {
+
+        await admin.auth().verifyIdToken(authToken);
       }
-      else {
+      catch {
         return res.sendStatus(401);
       }
+    }
 
+    next();
+  }
+  catch (error) {
+    return res.sendStatus(401);
+  }
+};
+
+
+const fetchIdTokenDetails = async (req, res, next) => {
+  try {
+    if (req != null && req != undefined) {
+
+      const authToken = req.headers.authorization?.split('Bearer ')[1];
+
+      try {
+
+        let userDetails = await admin.auth().verifyIdToken(authToken);
+
+        return userDetails;
+
+      }
+      catch {
+        return res.sendStatus(401);
+      }
     }
 
     next();
@@ -39,4 +50,4 @@ const verifyIdToken = async (req, res, next) => {
 
 
 
-module.exports = { verifyIdToken, fetchAuthToken };
+module.exports = { verifyIdToken, fetchIdTokenDetails };

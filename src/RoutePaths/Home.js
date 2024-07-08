@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
-const { verifyIdToken } = require('../authMiddleware');
 const { db, currentTime } = require('../credentials/firebaseCredentials');
+const { verifyIdToken } = require('../authMiddleware');
 
 router.use(verifyIdToken);
 
@@ -10,36 +10,30 @@ router.use(verifyIdToken);
 router.post("/Home", async (req, res) => {
 
     try {
-        res.sendStatus(200);
+        let homePageDataArray = [];
+        const docRef = db.collection('StudentDetailsV2');
+        const snapshot = await docRef.get();
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.CreatedDateTime) {
+                let createdDateTime = doc.data().CreatedDateTime.toDate().toLocaleString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit"
+                });
+                
+                data.CreatedDateTime = createdDateTime;
+            }
+            homePageDataArray.push(data)
+        });
+
+        res.json(homePageDataArray);
     }
     catch {
         res.sendStatus(400);
-    }
-}
-);
-
-//Create new documents
-router.post("/Create", async (req, res) => {
-
-    try {
-
-        let requestBody = req.body;
-        const docRef = db.collection(config.Collection.StudentDetails).doc(requestBody.Name);
-        const docSnapshot = await docRef.get();
-
-        if (docSnapshot.data()) {
-            res.send({ "responseCode": 2 });
-        }
-        else {
-            await docRef.set({
-                ...requestBody, CreatedDateTime: currentTime
-            });
-            res.send({ "responseCode": 1 });
-        }
-
-    }
-    catch {
-        res.send({ "responseCode": 0 }).status(400);
     }
 }
 );

@@ -1,9 +1,10 @@
 const express = require('express');
 const { db, admin } = require('../credentials/firebaseCredentials');
-const config = require("../../config/config.json");
+const { verifyIdToken } = require('../authMiddleware');
 const router = express.Router();
-var jwt = require('jsonwebtoken');
 
+
+router.use(verifyIdToken);
 
 // Middleware to extract Bearer token
 router.use((req, res, next) => {
@@ -17,25 +18,21 @@ router.use((req, res, next) => {
     next();
 });
 
-const jwtSign = async (req) => {
+const fetchData = async (req) => {
 
     // Get the current date and time
     const currentDate = new Date();
     let expiry = currentDate.getTime() + (60 * 60 * 1000);
 
     let emailId = req.body.emailId;
-    let Name = "", Role = "";
+    let Name = "";
     const docRef = db.collection('UserName').doc(emailId);
     const doc = await docRef.get();
     if (doc.exists) {
         Name = doc.data().Name;
-        Role = doc.data().role;
     }
-
-    var authToken = jwt.sign({ authToken: req.idToken, Role: Role }, config.SecretKey);
-
+    
     return {
-        authToken: authToken,
         expiry: expiry,
         Name: Name
     }
@@ -49,7 +46,8 @@ router.post("/login", async (req, res) => {
     if (req != null && req != undefined) {
 
         try {
-            let responseJson = await jwtSign(req);
+            let responseJson = await fetchData(req);
+
             res.json(responseJson);
         }
         catch {
@@ -75,12 +73,12 @@ router.post("/refreshToken", async (req, res) => {
 
             req.idToken = customToken;
 
-            let responseJson = await jwtSign(req);
+            let responseJson = await fetchData(req);
             res.json(responseJson);
 
         }
         else {
-            res.sendStatus(400);
+            res.sendStatus(400); 
         }
     }
     catch (ex) {
