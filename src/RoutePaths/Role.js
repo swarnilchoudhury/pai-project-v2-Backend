@@ -9,7 +9,7 @@ router.use(async (req, res, next) => {
     let userDetails = await fetchIdTokenDetails(req, res, next);
     let Role = "";
 
-    const docRef = db.collection('UserName').doc(userDetails.email);
+    const docRef = db.collection('UserName').doc(userDetails.id);
     const doc = await docRef.get();
     if (doc.exists) {
         Name = doc.data().Name,

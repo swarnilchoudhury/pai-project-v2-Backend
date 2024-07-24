@@ -2,7 +2,7 @@ const express = require("express");
 const serverless = require("serverless-http");
 const loginRouter = require("../../src/RoutePaths/login");
 const homeRouter = require("../../src/RoutePaths/Home");
-const verifyToken = require("../../src/RoutePaths/VerifyToken");
+const tokenRelated = require("../../src/RoutePaths/TokenRelated");
 const roleRouter = require("../../src/RoutePaths/Role");
 
 // Create an instance of the Express app
@@ -20,6 +20,7 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, PUT");
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Cache-Control', 'no-store');
 
    // Handle preflight requests
    if (req.method === 'OPTIONS') {
@@ -36,7 +37,7 @@ app.use('/api/', loginRouter);
 app.use('/api/', homeRouter);
 
 //For verifyToken
-app.use('/api/', verifyToken);
+app.use('/api/', tokenRelated);
 
 //For Roles related routes
 app.use("/api/", roleRouter)

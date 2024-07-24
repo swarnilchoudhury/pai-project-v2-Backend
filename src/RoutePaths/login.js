@@ -1,8 +1,9 @@
 const express = require('express');
-const { db, admin } = require('../credentials/firebaseCredentials');
+const { db } = require('../credentials/firebaseCredentials');
 const { verifyIdToken } = require('../authMiddleware');
-const router = express.Router();
+const { authTokenTimeLogic } = require('../AuthTokenTimeLogic');
 
+const router = express.Router();
 
 router.use(verifyIdToken);
 
@@ -20,20 +21,21 @@ router.use((req, res, next) => {
 
 const fetchData = async (req) => {
 
-    // Get the current date and time
-    const currentDate = new Date();
-    let expiry = currentDate.getTime() + (60 * 60 * 1000);
-
     let emailId = req.body.emailId;
     let Name = "";
+    let id = "";
     const docRef = db.collection('UserName').doc(emailId);
     const doc = await docRef.get();
     if (doc.exists) {
         Name = doc.data().Name;
+        id = doc.id;
     }
-    
+
+    const { authToken, authTokenTime } = authTokenTimeLogic(id);
+
     return {
-        expiry: expiry,
+        authToken: authToken,
+        authTokenTime: authTokenTime,
         Name: Name
     }
 
@@ -54,37 +56,6 @@ router.post("/login", async (req, res) => {
             res.sendStatus(400);
         }
     }
-});
-
-//Refresh Token
-router.post("/refreshToken", async (req, res) => {
-
-    try {
-        if (req != null && req != undefined) {
-
-            let authToken = req.idToken;
-
-            // Verify the old token
-            const decodedToken = await admin.auth().verifyIdToken(authToken);
-            const uid = decodedToken.uid;
-
-            // Issue a new token
-            const customToken = await admin.auth().createCustomToken(uid);
-
-            req.idToken = customToken;
-
-            let responseJson = await fetchData(req);
-            res.json(responseJson);
-
-        }
-        else {
-            res.sendStatus(400); 
-        }
-    }
-    catch (ex) {
-        res.sendStatus(401);
-    }
-
 });
 
 module.exports = router;
