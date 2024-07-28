@@ -1,4 +1,4 @@
 # Local Netlify folder
 .netlify
 node_modules
-.credentials/serviceAccount.json
+credentials/serviceAccount.json
