@@ -37,7 +37,6 @@ const fetchIdTokenDetails = (req, res, next) => {
       const authToken = req.headers.authorization?.split('Bearer ')[1];
 
       try {
-        console.log("Hi 2")
         let userDetails = jwt.verify(authToken, config.SecretKey);
 
         return userDetails;

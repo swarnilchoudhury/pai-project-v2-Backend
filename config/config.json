@@ -1,7 +1,9 @@
 {
     "SecretKey":"Sw@#$%rn12@#",
-    "Collection": {
+    "Collections": {
         "UserName": "UserName",
-        "StudentDetails": "StudentDetails"
+        "StudentDetailsActiveStatus": "StudentDetailsActive",
+        "StudentDetailsDeactiveStatus": "StudentDetailsDeactive",
+        "StudentDetailsApprovalStatus": "StudentDetailsApproval"
     }
 }
