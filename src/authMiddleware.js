@@ -1,19 +1,18 @@
 const { admin } = require("./credentials/firebaseCredentials");
-const config = require("../config/config.json");
-const jwt = require('jsonwebtoken');
 
 const verifyIdToken = async (req, res, next) => {
   try {
     if (req != null && req != undefined) {
-    
-      const authToken = req.headers.authorization?.split('Bearer ')[1];
 
+      const authToken = req.headers.authorization?.split('Bearer ')[1];
+      
       try {
-        if (req.url.includes("/login")) {
+        if (!req.baseUrl.includes('/role')) {
           await admin.auth().verifyIdToken(authToken);
         }
         else {
-          jwt.verify(authToken, config.SecretKey);
+          let userDetails = await admin.auth().verifyIdToken(authToken);
+          return userDetails;
         }
 
       }
@@ -25,35 +24,8 @@ const verifyIdToken = async (req, res, next) => {
     next();
   }
   catch (error) {
-    return res.sendStatus(401);
+    return res.sendStatus(400);
   }
 };
 
-
-const fetchIdTokenDetails = (req, res, next) => {
-  try {
-    if (req != null && req != undefined) {
-
-      const authToken = req.headers.authorization?.split('Bearer ')[1];
-
-      try {
-        let userDetails = jwt.verify(authToken, config.SecretKey);
-
-        return userDetails;
-
-      }
-      catch {
-        return res.sendStatus(401);
-      }
-    }
-
-    next();
-  }
-  catch (error) {
-    return res.sendStatus(401);
-  }
-};
-
-
-
-module.exports = { verifyIdToken, fetchIdTokenDetails };
+module.exports = { verifyIdToken };

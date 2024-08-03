@@ -1,7 +1,6 @@
 const express = require('express');
 const { db } = require('../credentials/firebaseCredentials');
 const { verifyIdToken } = require('../authMiddleware');
-const { authTokenTimeLogic } = require('../AuthTokenTimeLogic');
 
 const router = express.Router();
 
@@ -23,19 +22,13 @@ const fetchData = async (req) => {
 
     let emailId = req.body.emailId;
     let Name = "";
-    let id = "";
     const docRef = db.collection('UserName').doc(emailId);
     const doc = await docRef.get();
     if (doc.exists) {
-        Name = doc.data().Name;
-        id = doc.id;
+        Name = doc.data().Name
     }
 
-    const { authToken, authTokenTime } = authTokenTimeLogic(id);
-
     return {
-        authToken: authToken,
-        authTokenTime: authTokenTime,
         Name: Name
     }
 
