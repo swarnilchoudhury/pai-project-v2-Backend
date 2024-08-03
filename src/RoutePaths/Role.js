@@ -2,20 +2,25 @@ const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
 const { db, currentTime } = require('../credentials/firebaseCredentials');
-const { fetchIdTokenDetails } = require('../authMiddleware');
+const { verifyIdToken } = require('../authMiddleware');
 
 router.use(async (req, res, next) => {
+    try {
+        let userDetails = await verifyIdToken(req, res, next);
+        let Role = "";
+        const docRef = db.collection(config.Collections.UserName).doc(userDetails.email);
+        let result = await docRef.get();
 
-    let userDetails = await fetchIdTokenDetails(req, res, next);
-    let Role = "";
+        if (result.exists) {
+            Role = result.data().Role;
+        }
 
-    const docRef = db.collection(config.Collections.UserName).doc(userDetails.id);
-    const doc = await docRef.get();
-    if (doc.exists) {
-            Role = doc.data().Role;
+        req.Role = Role;
+
     }
-
-    req.Role = Role;
+    catch {
+        return res.sendStatus(400);
+    }
 
     next();
 
@@ -32,11 +37,13 @@ router.post("/create", async (req, res) => {
             studentCode = "PAI-" + studentCode;
         }
 
+        let document = { ...requestBody, studentCode: studentCode, CreatedDateTime: currentTime }
+
         if (req.Role.toUpperCase() === "ADMIN") {
 
             let docRef = db.collection(config.Collections.StudentDetailsActiveStatus).doc(studentCode);
-            await docRef.set(requestBody);
-            
+            await docRef.set(document);
+
             // Confirm the document was written successfully
             let doc = await docRef.get();
             if (doc.exists) {
@@ -48,11 +55,11 @@ router.post("/create", async (req, res) => {
         else {
             let docRef = db.collection(config.Collections.StudentDetailsApprovalStatus).doc(studentCode);
             await docRef.set(requestBody);
-            
+
             // Confirm the document was written successfully
             let doc = await docRef.get();
             if (doc.exists) {
-                return res.status(200).json({ message: studentCode + '  has sent for approval.' });
+                return res.status(200).json({ message: studentCode + ' has been sent for approval.' });
             } else {
                 return res.status(500).json({ message: 'Failed to write document' });
             }
@@ -60,7 +67,7 @@ router.post("/create", async (req, res) => {
 
     }
     catch {
-        res.send({ "responseCode": 0 }).status(400);
+        return res.send({ "responseCode": 0 }).status(400);
     }
 }
 );

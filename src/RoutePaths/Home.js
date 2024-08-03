@@ -7,11 +7,23 @@ const { verifyIdToken } = require('../authMiddleware');
 router.use(verifyIdToken);
 
 //Home Page to Fetch Details
-router.post("/Home", async (req, res) => {
+router.get("/Home", async (req, res) => {
 
     try {
         let homePageDataArray = [];
-        const docRef = db.collection('StudentDetailsV2');
+        let docRef;
+        let status = req.headers['x-status'];
+
+        if (status === 'Deactive') {
+            docRef = db.collection(config.Collections.StudentDetailsDeactiveStatus);
+        }
+        else if (status === 'Unapproval') {
+            docRef = db.collection(config.Collections.StudentDetailsApprovalStatus);
+        }
+        else {
+            docRef = db.collection(config.Collections.StudentDetailsActiveStatus);
+        }
+
         const snapshot = await docRef.get();
         snapshot.forEach(doc => {
             const data = doc.data();
