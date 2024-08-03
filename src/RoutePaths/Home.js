@@ -44,7 +44,8 @@ router.get("/Home", async (req, res) => {
 
         res.json(homePageDataArray);
     }
-    catch {
+    catch (e) {
+        console.log(e)
         res.sendStatus(400);
     }
 }
