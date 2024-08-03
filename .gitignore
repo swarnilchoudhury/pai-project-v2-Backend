@@ -2,4 +2,3 @@
 .netlify
 node_modules
 credentials/serviceAccount.json
-.env
