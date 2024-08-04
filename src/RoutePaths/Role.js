@@ -31,13 +31,13 @@ router.post("/create", async (req, res) => {
 
     try {
         let requestBody = req.body;
-        let studentCode = requestBody.studentCode;
+        let StudentCode = requestBody.StudentCode;
 
-        if (!studentCode.includes("PAI")) {
-            studentCode = "PAI-" + studentCode;
+        if (!StudentCode.includes("PAI")) {
+            StudentCode = "PAI-" + StudentCode;
         }
 
-        let createdDateTimeFormatted = new Date().toLocaleString("en-US", {
+        let createdDateTime = new Date().toLocaleString("en-US", {
             timeZone: "Asia/Kolkata",
             year: "numeric",
             month: "short",
@@ -47,30 +47,30 @@ router.post("/create", async (req, res) => {
             second: "2-digit"
         });
 
-        let document = { ...requestBody, studentCode: studentCode, CreatedDateTime: currentTime, CreatedDateTimeFormatted: createdDateTimeFormatted };
+        let document = { ...requestBody, StudentCode: StudentCode, CreatedDateTime: currentTime, CreatedDateTimeFormatted: createdDateTime };
 
 
         if (req.Role.toUpperCase() === "ADMIN") {
 
-            let docRef = db.collection(config.Collections.StudentDetailsActiveStatus).doc(studentCode);
+            let docRef = db.collection(config.Collections.StudentDetailsActiveStatus).doc(StudentCode);
             await docRef.set(document);
 
             // Confirm the document was written successfully
             let doc = await docRef.get();
             if (doc.exists) {
-                return res.status(200).json({ message: studentCode + ' has been created.' });
+                return res.status(200).json({ message: StudentCode + ' has been created.' });
             } else {
                 return res.status(500).json({ message: 'Failed to write document' });
             }
         }
         else {
-            let docRef = db.collection(config.Collections.StudentDetailsApprovalStatus).doc(studentCode);
+            let docRef = db.collection(config.Collections.StudentDetailsApprovalStatus).doc(StudentCode);
             await docRef.set(document);
 
             // Confirm the document was written successfully
             let doc = await docRef.get();
             if (doc.exists) {
-                return res.status(200).json({ message: studentCode + ' has been sent for approval.' });
+                return res.status(200).json({ message: StudentCode + ' has been sent for approval.' });
             } else {
                 return res.status(500).json({ message: 'Failed to write document' });
             }
