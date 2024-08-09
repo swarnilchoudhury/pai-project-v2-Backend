@@ -3,6 +3,7 @@ const serverless = require("serverless-http");
 const loginRouter = require("../../src/RoutePaths/login");
 const homeRouter = require("../../src/RoutePaths/Home");
 const roleRouter = require("../../src/RoutePaths/Role");
+const { verifyIdToken } = require("../../src/authMiddleware");
 
 // Create an instance of the Express app
 const app = express();
@@ -36,6 +37,8 @@ app.use((req, res, next) => {
 
 //For Roles related routes
 app.use("/api/role", roleRouter);
+
+app.use(verifyIdToken);
 
 // For Login routes
 app.use('/api/', loginRouter);

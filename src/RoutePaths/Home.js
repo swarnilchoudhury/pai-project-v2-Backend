@@ -2,9 +2,6 @@ const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
 const { db } = require('../credentials/firebaseCredentials');
-const { verifyIdToken } = require('../authMiddleware');
-
-router.use(verifyIdToken);
 
 //Home Page to Fetch Details
 router.get("/Home", async (req, res) => {
@@ -14,13 +11,13 @@ router.get("/Home", async (req, res) => {
         let status = req.headers['x-status'];
 
         if (status === 'Deactive') {
-            docRef = db.collection(config.Collections.StudentDetailsDeactiveStatus).orderBy('StudentName', 'asc');
+            docRef = db.collection(config.collections.studentDetailsDeactiveStatus).orderBy('studentName', 'asc');
         }
         else if (status === 'Unapproval') {
-            docRef = db.collection(config.Collections.StudentDetailsApprovalStatus).orderBy('StudentName', 'asc');
+            docRef = db.collection(config.collections.studentDetailsApprovalStatus).orderBy('studentName', 'asc');
         }
         else {
-            docRef = db.collection(config.Collections.StudentDetailsActiveStatus).orderBy('StudentName', 'asc');
+            docRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentName', 'asc');
         }
 
         const snapshot = await docRef.get();
@@ -28,7 +25,7 @@ router.get("/Home", async (req, res) => {
         // Map the snapshot to an array of document data
         let homePageDataArray = snapshot.docs.map(doc => {
             const data = doc.data();
-            const { CreatedDateTime, ...otherData } = data; // Destructure to exclude createdDateTime
+            const { createdDateTime, ...otherData } = data; // Destructure to exclude createdDateTime
             return {
                 ...otherData,
             };
@@ -47,13 +44,13 @@ router.get("/Home", async (req, res) => {
 router.post("/searchCode", async (req, res) => {
 
     try {
-        let StudentCode = req.body.StudentCode;
+        let studentCode = req.body.studentCode;
 
-        if (!StudentCode.includes("PAI")) {
-            StudentCode = "PAI-" + StudentCode;
+        if (!studentCode.includes("PAI")) {
+            studentCode = "PAI-" + studentCode;
         }
 
-        const docRef = db.collection(config.Collections.StudentDetailsActiveStatus).doc(StudentCode);
+        const docRef = db.collection(config.collections.studentDetailsActiveStatus).doc(studentCode);
         const doc = await docRef.get();
         if (doc.exists) {
             return res.json({ returnCode: 1 });

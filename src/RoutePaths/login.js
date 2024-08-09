@@ -5,8 +5,6 @@ const config = require('../../config/config.json')
 
 const router = express.Router();
 
-router.use(verifyIdToken);
-
 // Middleware to extract Bearer token
 router.use((req, res, next) => {
     let idToken = req.headers.authorization?.split('Bearer ')[1];
@@ -23,14 +21,14 @@ const fetchData = async (req) => {
 
     let emailId = req.body.emailId;
     let Name = "";
-    const docRef = db.collection(config.Collections.UserName).doc(emailId);
+    const docRef = db.collection(config.collections.userName).doc(emailId);
     const doc = await docRef.get();
     if (doc.exists) {
-        Name = doc.data().Name
+        Name = doc.data().name
     }
 
     return {
-        Name: Name
+        name: Name
     }
 
 }

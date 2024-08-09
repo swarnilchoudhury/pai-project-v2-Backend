@@ -8,11 +8,11 @@ router.use(async (req, res, next) => {
     try {
         let userDetails = await verifyIdToken(req, res, next);
         let Role = "";
-        const docRef = db.collection(config.Collections.UserName).doc(userDetails.email);
+        const docRef = db.collection(config.collections.userName).doc(userDetails.email);
         let result = await docRef.get();
 
         if (result.exists) {
-            Role = result.data().Role;
+            Role = result.data().role;
         }
 
         req.Role = Role;
@@ -31,10 +31,10 @@ router.post("/create", async (req, res) => {
 
     try {
         let requestBody = req.body;
-        let StudentCode = requestBody.StudentCode;
+        let studentCode = requestBody.studentCode;
 
-        if (!StudentCode.includes("PAI")) {
-            StudentCode = "PAI-" + StudentCode;
+        if (!studentCode.includes("PAI")) {
+            studentCode = "PAI-" + studentCode;
         }
 
         let createdDateTime = new Date().toLocaleString("en-US", {
@@ -47,30 +47,30 @@ router.post("/create", async (req, res) => {
             second: "2-digit"
         });
 
-        let document = { ...requestBody, StudentCode: StudentCode, CreatedDateTime: currentTime, CreatedDateTimeFormatted: createdDateTime };
+        let document = { ...requestBody, studentCode: studentCode, createdDateTime: currentTime, createdDateTimeFormatted: createdDateTime };
 
 
         if (req.Role.toUpperCase() === "ADMIN") {
 
-            let docRef = db.collection(config.Collections.StudentDetailsActiveStatus).doc(StudentCode);
+            let docRef = db.collection(config.collections.studentDetailsActiveStatus).doc(studentCode);
             await docRef.set(document);
 
             // Confirm the document was written successfully
             let doc = await docRef.get();
             if (doc.exists) {
-                return res.status(200).json({ message: StudentCode + ' has been created.' });
+                return res.status(200).json({ message: studentCode + ' has been created.' });
             } else {
                 return res.status(500).json({ message: 'Failed to write document' });
             }
         }
         else {
-            let docRef = db.collection(config.Collections.StudentDetailsApprovalStatus).doc(StudentCode);
+            let docRef = db.collection(config.collections.studentDetailsApprovalStatus).doc(studentCode);
             await docRef.set(document);
 
             // Confirm the document was written successfully
             let doc = await docRef.get();
             if (doc.exists) {
-                return res.status(200).json({ message: StudentCode + ' has been sent for approval.' });
+                return res.status(200).json({ message: studentCode + ' has been sent for approval.' });
             } else {
                 return res.status(500).json({ message: 'Failed to write document' });
             }
@@ -93,12 +93,16 @@ router.post("/update", async (req, res) => {
             let status = req.headers['x-update'].toLowerCase();
             let currentDocRef, newDocRef;
             if (status === 'deactive') {
-                currentDocRef = db.collection(config.Collections.StudentDetailsActiveStatus);
-                newDocRef = db.collection(config.Collections.StudentDetailsDeactiveStatus);
+                currentDocRef = db.collection(config.collections.studentDetailsActiveStatus);
+                newDocRef = db.collection(config.collections.studentDetailsDeactiveStatus);
             }
             else if(status === 'active'){
-                currentDocRef = db.collection(config.Collections.StudentDetailsDeactiveStatus);
-                newDocRef = db.collection(config.Collections.StudentDetailsActiveStatus);
+                currentDocRef = db.collection(config.collections.studentDetailsDeactiveStatus);
+                newDocRef = db.collection(config.collections.studentDetailsActiveStatus);
+            }
+            else if(status === 'approve'){
+                currentDocRef = db.collection(config.collections.studentDetailsApprovalStatus);
+                newDocRef = db.collection(config.collections.studentDetailsActiveStatus);
             }
 
             const movePromises = req.body.data.map(
