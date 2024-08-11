@@ -3,7 +3,7 @@ const router = express.Router();
 const config = require("../../config/config.json");
 const { db, currentTime } = require('../credentials/firebaseCredentials');
 const { verifyIdToken, verifyIdTokenDetails } = require('../authMiddleware');
-const { adminRole } = require('../RoleFunctions');
+const { adminRole } = require('../roleFunctions');
 
 //Home Page to Fetch Details
 router.get("/home", verifyIdTokenDetails, async (req, res) => {
