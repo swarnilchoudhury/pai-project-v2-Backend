@@ -1,7 +1,7 @@
 const express = require('express');
 const { db } = require('../credentials/firebaseCredentials');
+const config = require('../../config/config.json');
 const { verifyIdToken } = require('../authMiddleware');
-const config = require('../../config/config.json')
 
 const router = express.Router();
 
@@ -33,9 +33,8 @@ const fetchData = async (req) => {
 
 }
 
-
 //For Login
-router.post("/login", async (req, res) => {
+router.post("/login", verifyIdToken, async (req, res) => {
 
     if (req != null && req != undefined) {
 
