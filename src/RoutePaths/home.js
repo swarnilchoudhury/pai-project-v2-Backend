@@ -108,8 +108,8 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
         const docSnapshot = await docRef.get();
         if (docSnapshot.exists) {
             const message = adminRole(req) //Admin role
-                ? `${studentCode} has been created.`
-                : `${studentCode} has been sent for approval.`;
+                ? `${studentCode} has been created`
+                : `${studentCode} has been sent for approval`;
 
                 return res.status(200).json({ message });
         } else {
