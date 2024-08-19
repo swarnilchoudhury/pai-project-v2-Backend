@@ -2,6 +2,7 @@ const express = require("express");
 const serverless = require("serverless-http");
 const loginRouter = require("../../src/RoutePaths/login");
 const homeRouter = require("../../src/RoutePaths/home");
+const permissionsRouter = require("../../src/RoutePaths/permissions");
 
 // Create an instance of the Express app
 const app = express();
@@ -38,6 +39,9 @@ app.use('/api/', loginRouter);
 
 // For HomePage routes
 app.use('/api/', homeRouter);
+
+// For Permissions routes
+app.use('/api/', permissionsRouter);
 
 // Use the router to handle requests to the `/.netlify/functions/api` path
 app.use("/api/", router);

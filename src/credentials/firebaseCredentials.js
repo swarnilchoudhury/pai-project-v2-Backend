@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 
+//Service Account Details
 const serviceAccount = {
   type: process.env.FIREBASE_TYPE,
   project_id: process.env.FIREBASE_PROJECT_ID,
@@ -19,7 +20,7 @@ admin.initializeApp({
 });
 
 
-const db = admin.firestore();
-const currentTime = admin.firestore.FieldValue.serverTimestamp();
+const db = admin.firestore(); //DB initialize
+const currentTime = admin.firestore.FieldValue.serverTimestamp(); //Fetch CurrentTime
 
 module.exports = { admin, db, currentTime };                     

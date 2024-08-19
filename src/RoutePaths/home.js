@@ -1,21 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
-const { db, currentTime } = require('../credentials/firebaseCredentials');
+const { db } = require('../credentials/firebaseCredentials');
 const { verifyIdToken, verifyIdTokenDetails } = require('../authMiddleware');
 const { adminRole } = require('../roleFunctions');
 
 //Home Page to Fetch Details
-router.get("/home", verifyIdTokenDetails, async (req, res) => {
+router.get("/home", verifyIdToken, async (req, res) => {
 
     try {
         let docRef;
-        let status = req.headers['x-status'];
+        let status = req.headers['x-status'].toLowerCase(); //Fetch Status from UI
 
-        if (status === 'Deactive') {
+        if (status === 'deactive') {
             docRef = db.collection(config.collections.studentDetailsDeactiveStatus).orderBy('studentName', 'asc');
         }
-        else if (status === 'Unapproval') {
+        else if (status === 'unapproval') {
             docRef = db.collection(config.collections.studentDetailsApprovalStatus).orderBy('studentName', 'asc');
         }
         else {
@@ -46,10 +46,10 @@ router.get("/home", verifyIdTokenDetails, async (req, res) => {
 router.post("/searchCode", verifyIdToken, async (req, res) => {
 
     try {
-        let studentCode = req.body.studentCode;
+        let studentCode = req.body.studentCode; //Fetch student Code from UI
 
         if (!studentCode.includes("PAI")) {
-            studentCode = "PAI-" + studentCode;
+            studentCode = "PAI-" + studentCode; //Append PAI
         }
 
         const docRef = db.collection(config.collections.studentDetailsActiveStatus).doc(studentCode);
@@ -70,16 +70,15 @@ router.post("/searchCode", verifyIdToken, async (req, res) => {
 
 //Create new documents
 router.post("/create", verifyIdTokenDetails, async (req, res) => {
-
     try {
-        let requestBody = req.body;
-        let studentCode = requestBody.studentCode;
+        let { studentCode, ...otherData } = req.body; //Fetch student Code from UI
 
         if (!studentCode.includes("PAI")) {
-            studentCode = "PAI-" + studentCode;
+            studentCode = "PAI-" + studentCode; //Append PAI
         }
 
-        let createdDateTime = new Date().toLocaleString("en-US", {
+        // Create timestamp for the document
+        const createdDateTime = new Date().toLocaleString("en-US", {
             timeZone: "Asia/Kolkata",
             year: "numeric",
             month: "short",
@@ -89,133 +88,95 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
             second: "2-digit"
         });
 
-        let document = { ...requestBody, studentCode: studentCode, createdDateTime: currentTime, createdDateTimeFormatted: createdDateTime };
+        const document = {
+            ...otherData,
+            studentCode,
+            createdDateTimeFormatted: createdDateTime,
+        }; //Add the studentCode and createdDateTime to the document
 
+        // Determine the target collection based on user role
+        const collectionName = adminRole(req)
+            ? config.collections.studentDetailsActiveStatus
+            : config.collections.studentDetailsApprovalStatus;
 
-        if (adminRole(req)) {
+        const docRef = db.collection(collectionName).doc(studentCode);
 
-            let docRef = db.collection(config.collections.studentDetailsActiveStatus).doc(studentCode);
-            await docRef.set(document);
+        // Write the document to the database
+        await docRef.set(document);
 
-            // Confirm the document was written successfully
-            let doc = await docRef.get();
-            if (doc.exists) {
-                return res.status(200).json({ message: studentCode + ' has been created.' });
-            } else {
-                return res.status(500).json({ message: 'Failed to write document' });
-            }
+        // Confirm the document was written successfully
+        const docSnapshot = await docRef.get();
+        if (docSnapshot.exists) {
+            const message = adminRole(req) //Admin role
+                ? `${studentCode} has been created.`
+                : `${studentCode} has been sent for approval.`;
+
+                return res.status(200).json({ message });
+        } else {
+            return res.status(400).json({ message: 'Failed to write document' });
         }
-        else {
-            let docRef = db.collection(config.collections.studentDetailsApprovalStatus).doc(studentCode);
-            await docRef.set(document);
-
-            // Confirm the document was written successfully
-            let doc = await docRef.get();
-            if (doc.exists) {
-                return res.status(200).json({ message: studentCode + ' has been sent for approval.' });
-            } else {
-                return res.status(500).json({ message: 'Failed to write document' });
-            }
-        }
-
-    }
-    catch {
-        return res.send({ "responseCode": 0 }).status(400);
-    }
-}
-
-
-);
-
-//Update new documents
-router.post("/update", verifyIdTokenDetails, async (req, res) => {
-
-    try {
-        if (adminRole(req)) {
-
-            let status = req.headers['x-update'].toLowerCase();
-            let validateFlag = false;
-            let currentDocRef, newDocRef;
-            if (status === 'deactive') {
-                currentDocRef = db.collection(config.collections.studentDetailsActiveStatus);
-                newDocRef = db.collection(config.collections.studentDetailsDeactiveStatus);
-            }
-            else if (status === 'active') {
-                currentDocRef = db.collection(config.collections.studentDetailsDeactiveStatus);
-                newDocRef = db.collection(config.collections.studentDetailsActiveStatus);
-                validateFlag = true;
-            }
-            else if (status === 'approve') {
-                currentDocRef = db.collection(config.collections.studentDetailsApprovalStatus);
-                newDocRef = db.collection(config.collections.studentDetailsActiveStatus);
-                validateFlag = true;
-            }
-
-            const UpdateDetails = async (currentDocRef, newDocRef, studentCode) => {
-                let docRef = currentDocRef.doc(studentCode);
-
-                // Get the document
-                const docSnapshot = await docRef.get();
-
-                // Get the document data
-                const docData = docSnapshot.data();
-                
-                //Set the Data
-                await newDocRef.doc(studentCode).set(docData);
-
-                // Delete the document from the original collection
-                await docRef.delete();
-            }
-
-
-            if (validateFlag) {
-                let message = "";
-                const movePromises = req.body.data.map(
-                    async (studentCode) => {
-                        // Reference to the new document location in the target collection
-                        const newDocumentRef = newDocRef.doc(studentCode);
-
-                        // Write the document data to the new collection
-                        await newDocumentRef.get();
-
-                        if (newDocumentRef.exists) {
-                            message = message + studentCode + " ";
-                        }
-                        else {
-                            await UpdateDetails(currentDocRef, newDocRef, studentCode);
-                        }
-                    }
-                );
-
-                // Wait for all move operations to complete
-                await Promise.all(movePromises);
-
-                if (message) {
-                    return res.sendStatus(200).json({ message: message + " already present in Active Status" });
-                }
-            }
-            else {
-                const movePromises = req.body.data.map(
-                    async (studentCode) => {
-                        await UpdateDetails(currentDocRef, newDocRef, studentCode);
-                    });
-
-                // Wait for all move operations to complete
-                await Promise.all(movePromises);
-
-            }
-
-            return res.sendStatus(200);
-        }
-        else {
-            return res.json({ message: "Not Authorized" });
-        }
-
-    }
-    catch {
+    } catch {
         return res.sendStatus(400);
     }
-}
-);
+});
+
+//For Changing of Status for Student
+router.post("/update", verifyIdTokenDetails, async (req, res) => {
+    try {
+        if (!adminRole(req)) {
+            return res.status(200).json({ message: "Not Authorized" });
+        }
+
+        let status = req.headers['x-update'].toLowerCase(); //Fetch Status from UI
+        let validateFlag = false;
+        let currentDocRef, newDocRef;
+
+        if (status === 'deactive') {
+            currentDocRef = db.collection(config.collections.studentDetailsActiveStatus);
+            newDocRef = db.collection(config.collections.studentDetailsDeactiveStatus);
+        } else if (status === 'active') {
+            currentDocRef = db.collection(config.collections.studentDetailsDeactiveStatus);
+            newDocRef = db.collection(config.collections.studentDetailsActiveStatus);
+            validateFlag = true;
+        } else if (status === 'approve') {
+            currentDocRef = db.collection(config.collections.studentDetailsApprovalStatus);
+            newDocRef = db.collection(config.collections.studentDetailsActiveStatus);
+            validateFlag = true;
+        }
+
+        const UpdateDetails = async (currentDocRef, newDocRef, studentCode) => { //Update
+            let docRef = currentDocRef.doc(studentCode);
+
+            const docSnapshot = await docRef.get();
+            const docData = docSnapshot.data();
+
+            await newDocRef.doc(studentCode).set(docData);
+            await docRef.delete();
+        }
+
+        let message = "";
+        const movePromises = req.body.data.map(async (studentCode) => { //Move the data
+            const newDocumentRef = newDocRef.doc(studentCode);
+
+            let result = await newDocumentRef.get();
+
+            if (validateFlag && result.exists) {
+                message += `${studentCode} `;
+            } else {
+                await UpdateDetails(currentDocRef, newDocRef, studentCode);
+            }
+        });
+
+        await Promise.all(movePromises); //Wait till all the data moves
+        
+        if (message) {
+            return res.status(200).json({ message: `${message} already present in Active Status` });
+        } else {
+            return res.sendStatus(200);
+        }
+    } catch {
+        return res.sendStatus(400);
+    }
+});
 
 module.exports = router;

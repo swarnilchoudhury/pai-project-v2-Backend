@@ -1,7 +1,7 @@
 const adminRole = (req) => {
     try {
         if (req != null && req != undefined) {
-            return req.Role.trim().toUpperCase() === "ADMIN";
+            return req.Role.trim().toUpperCase() === "ADMIN"; //IF ADMIN, then return true
         }
         else {
             return false;
@@ -9,7 +9,7 @@ const adminRole = (req) => {
     }
     catch {
         return false;
-    } 
+    }
 };
 
 module.exports = { adminRole }

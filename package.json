@@ -13,10 +13,8 @@
   "dependencies": {
     "express": "^4.19.2",
     "firebase-admin": "^12.1.1",
-    "fs": "^0.0.1-security",
     "netlify-lambda": "^2.0.16",
     "path": "^0.12.7",
     "serverless-http": "^3.2.0"
   }
 }
-
