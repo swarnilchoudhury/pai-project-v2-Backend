@@ -71,10 +71,14 @@ router.post("/searchCode", verifyIdToken, async (req, res) => {
 //Create new documents
 router.post("/create", verifyIdTokenDetails, async (req, res) => {
     try {
-        let { studentCode, ...otherData } = req.body; //Fetch student Code from UI
+        let { studentCode, phoneNumber, ...otherData } = req.body; //Fetch student Code from UI
 
         if (!studentCode.includes("PAI")) {
             studentCode = "PAI-" + studentCode; //Append PAI
+        }
+
+        if (phoneNumber.length === 0) {
+            phoneNumber = "-";
         }
 
         // Create timestamp for the document
@@ -91,6 +95,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
         const document = {
             ...otherData,
             studentCode,
+            phoneNumber,
             createdDateTimeFormatted: createdDateTime,
         }; //Add the studentCode and createdDateTime to the document
 
@@ -111,7 +116,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
                 ? `${studentCode} has been created`
                 : `${studentCode} has been sent for approval`;
 
-                return res.status(200).json({ message });
+            return res.status(200).json({ message });
         } else {
             return res.status(400).json({ message: 'Failed to write document' });
         }
@@ -168,7 +173,7 @@ router.post("/update", verifyIdTokenDetails, async (req, res) => {
         });
 
         await Promise.all(movePromises); //Wait till all the data moves
-        
+
         if (message) {
             return res.status(200).json({ message: `${message} already present in Active Status` });
         } else {
