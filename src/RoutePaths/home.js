@@ -22,16 +22,17 @@ router.get("/home", verifyIdToken, async (req, res) => {
             docRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentName', 'asc');
         }
 
-        const snapshot = await docRef.get();
+        const snapshot = await docRef.select('studentName',
+            'studentCode',
+            'phoneNumber',
+            'guardianName',
+            'dob',
+            'admissionDate',
+            'createdDateTimeFormatted')
+            .get();
 
         // Map the snapshot to an array of document data
-        let homePageDataArray = snapshot.docs.map(doc => {
-            const data = doc.data();
-            const { createdDateTime, ...otherData } = data; // Destructure to exclude createdDateTime
-            return {
-                ...otherData,
-            };
-        });
+        let homePageDataArray = snapshot.docs.map(doc => doc.data());
 
         return res.json(homePageDataArray);
     }
