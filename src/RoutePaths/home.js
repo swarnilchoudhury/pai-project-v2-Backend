@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
-const { db } = require('../credentials/firebaseCredentials');
+const { db, currentTime } = require('../credentials/firebaseCredentials');
 const { verifyIdToken, verifyIdTokenDetails } = require('../authMiddleware');
 const { adminRole } = require('../roleFunctions');
 
@@ -116,6 +116,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
             studentCode,
             studentCodeNumeric,
             phoneNumber,
+            createdDateTime: currentTime,
             createdDateTimeFormatted: createdDateTime,
         }; //Add the studentCode and createdDateTime to the document
 
