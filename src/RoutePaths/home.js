@@ -101,7 +101,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
         }
 
         // Create timestamp for the document
-        const createdDateTime = new Date().toLocaleString("en-US", {
+        const createdDateTimeFormat = new Date().toLocaleString("en-US", {
             timeZone: "Asia/Kolkata",
             year: "numeric",
             month: "short",
@@ -117,7 +117,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
             studentCodeNumeric,
             phoneNumber,
             createdDateTime: currentTime,
-            createdDateTimeFormatted: createdDateTime,
+            createdDateTimeFormatted: createdDateTimeFormat,
         }; //Add the studentCode and createdDateTime to the document
 
         // Determine the target collection based on user role
