@@ -89,8 +89,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
     try {
         let { studentCode, phoneNumber, ...otherData } = req.body; //Fetch student Code from UI
 
-        let studentCodeNumeric = studentCode;
-        studentCodeNumeric = parseInt(studentCodeNumeric);
+        let studentCodeNumeric = parseInt(studentCode);
 
         if (!studentCode.includes("PAI")) {
             studentCode = "PAI-" + studentCode; //Append PAI
