@@ -66,12 +66,30 @@ router.post("/searchCode", verifyIdToken, async (req, res) => {
 }
 );
 
+//Latest StudentCode
+router.get("/latestCode", verifyIdToken, async (req, res) => {
 
+    try {
+        const docRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentCodeNumeric', 'desc').limit(1);
+        const snapshot = await docRef.get();
+
+        let latestStudentCode = snapshot.docs.length > 0 ? snapshot.docs[0].data().studentCodeNumeric : "";
+
+        return res.json({ latestStudentCode: "PAI-" + latestStudentCode });
+    }
+    catch {
+        return res.sendStatus(400);
+    }
+}
+);
 
 //Create new documents
 router.post("/create", verifyIdTokenDetails, async (req, res) => {
     try {
         let { studentCode, phoneNumber, ...otherData } = req.body; //Fetch student Code from UI
+
+        let studentCodeNumeric = studentCode;
+        studentCodeNumeric = parseInt(studentCodeNumeric);
 
         if (!studentCode.includes("PAI")) {
             studentCode = "PAI-" + studentCode; //Append PAI
@@ -95,6 +113,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
         const document = {
             ...otherData,
             studentCode,
+            studentCodeNumeric,
             phoneNumber,
             createdDateTimeFormatted: createdDateTime,
         }; //Add the studentCode and createdDateTime to the document
