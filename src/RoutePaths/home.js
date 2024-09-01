@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
-const { db, currentTime } = require('../credentials/firebaseCredentials');
+const { db, currentTime, admin } = require('../credentials/firebaseCredentials');
 const { verifyIdToken, verifyIdTokenDetails } = require('../authMiddleware');
 const { adminRole } = require('../roleFunctions');
 
@@ -88,7 +88,7 @@ router.get("/latestCode", verifyIdToken, async (req, res) => {
 //Create new documents
 router.post("/create", verifyIdTokenDetails, async (req, res) => {
     try {
-        let { studentCode, phoneNumber, ...otherData } = req.body; //Fetch student Code from UI
+        let { studentName, studentCode, phoneNumber, ...otherData } = req.body; //Fetch required details from UI
 
         let studentCodeNumeric = parseInt(studentCode);
 
@@ -113,6 +113,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
 
         const document = {
             ...otherData,
+            studentName,
             studentCode,
             studentCodeNumeric,
             phoneNumber,
@@ -134,18 +135,28 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
         // Confirm the document was written successfully
         const docSnapshot = await docRef.get();
         if (docSnapshot.exists) {
-            const message = adminRole(req) //Admin role
-                ? `${studentCode} has been created`
-                : `${studentCode} has been sent for approval`;
+            const studentViews = config.collections.studentDetailsViews;
+            const docRefViews = db.collection(studentViews).doc(config.documents.studentDetailsViewsData);
 
-            return res.status(200).json({ message });
-        } else {
-            return res.status(400).json({ message: 'Failed to write document' });
-        }
+            // New string to add to the array
+            const newString = studentName + " - " + studentCode;
+
+            docRefViews.set({
+                studentViews: admin.firestore.FieldValue.arrayUnion(newString)
+            }, { merge: true }) // Merge: true ensures existing fields are preserved and only the array is updated
+            
+                    const message = adminRole(req) //Admin role
+                        ? `${studentCode} has been created`
+                        : `${studentCode} has been sent for approval`;
+
+                    return res.status(200).json({ message });
+                } else {
+                    return res.status(400).json({ message: 'Failed to write document' });
+                }
     } catch {
-        return res.sendStatus(400);
-    }
-});
+            return res.sendStatus(400);
+        }
+    });
 
 //For Changing of Status for Student
 router.post("/update", verifyIdTokenDetails, async (req, res) => {
