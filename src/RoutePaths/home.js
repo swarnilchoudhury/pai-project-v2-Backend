@@ -28,7 +28,8 @@ router.get("/home", verifyIdToken, async (req, res) => {
             'guardianName',
             'dob',
             'admissionDate',
-            'createdDateTimeFormatted')
+            'createdDateTimeFormatted',
+            'createdBy')
             .get();
 
         // Map the snapshot to an array of document data
@@ -117,7 +118,8 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
             phoneNumber,
             createdDateTime: currentTime,
             createdDateTimeFormatted: createdDateTimeFormat,
-        }; //Add the studentCode and createdDateTime to the document
+            createdBy: req.Name.toUpperCase()
+        }; //Add the required details to the document
 
         // Determine the target collection based on user role
         const collectionName = adminRole(req)
