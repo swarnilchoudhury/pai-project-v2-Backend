@@ -88,7 +88,7 @@ router.get("/latestCode", verifyIdToken, async (req, res) => {
 //Create new documents
 router.post("/create", verifyIdTokenDetails, async (req, res) => {
     try {
-        let { studentName, studentCode, phoneNumber, ...otherData } = req.body; //Fetch required details from UI
+        let { studentName, studentCode, guardianName, phoneNumber, admissionDate, dob } = req.body; //Fetch required details from UI
 
         let studentCodeNumeric = parseInt(studentCode);
 
@@ -98,6 +98,14 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
 
         if (phoneNumber.length === 0) {
             phoneNumber = "-";
+        }
+
+        if (admissionDate.length === 0) {
+            admissionDate = "-";
+        }
+
+        if (dob.length === 0) {
+            dob = "-";
         }
 
         // Create timestamp for the document
@@ -112,11 +120,13 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
         });
 
         const document = {
-            ...otherData,
             studentName,
             studentCode,
+            guardianName,
             studentCodeNumeric,
             phoneNumber,
+            admissionDate,
+            dob,
             createdDateTime: currentTime,
             createdDateTimeFormatted: createdDateTimeFormat,
             createdBy: req.Name.toUpperCase()
