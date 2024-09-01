@@ -135,28 +135,31 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
         // Confirm the document was written successfully
         const docSnapshot = await docRef.get();
         if (docSnapshot.exists) {
-            const studentViews = config.collections.studentDetailsViews;
-            const docRefViews = db.collection(studentViews).doc(config.documents.studentDetailsViewsData);
 
-            // New string to add to the array
-            const newString = studentName + " - " + studentCode;
+            if (collectionName.includes(config.collections.studentDetailsActiveStatus)) {
+                const docRefViews = db.collection(config.collections.studentDetailsViews).doc(config.documents.studentDetailsViewsData);
 
-            docRefViews.set({
-                data: admin.firestore.FieldValue.arrayUnion(newString)
-            }, { merge: true }) // Merge: true ensures existing fields are preserved and only the array is updated
-            
-                    const message = adminRole(req) //Admin role
-                        ? `${studentCode} has been created`
-                        : `${studentCode} has been sent for approval`;
+                // New string to add to the array
+                const newString = studentName + " - " + studentCode;
 
-                    return res.status(200).json({ message });
-                } else {
-                    return res.status(400).json({ message: 'Failed to write document' });
-                }
-    } catch {
-            return res.sendStatus(400);
+                docRefViews.set({
+                    data: admin.firestore.FieldValue.arrayUnion(newString)
+                }, { merge: true }) // Merge: true ensures existing fields are preserved and only the array is updated
+
+            }
+
+            const message = adminRole(req) //Admin role
+                ? `${studentCode} has been created`
+                : `${studentCode} has been sent for approval`;
+
+            return res.status(200).json({ message });
+        } else {
+            return res.status(400).json({ message: 'Failed to write document' });
         }
-    });
+    } catch {
+        return res.sendStatus(400);
+    }
+});
 
 //For Changing of Status for Student
 router.post("/update", verifyIdTokenDetails, async (req, res) => {
@@ -167,6 +170,7 @@ router.post("/update", verifyIdTokenDetails, async (req, res) => {
 
         let status = req.headers['x-update'].toLowerCase(); //Fetch Status from UI
         let validateFlag = false;
+        let approveToActiveFlag = false;
         let currentDocRef, newDocRef;
 
         if (status === 'deactive') {
@@ -179,10 +183,26 @@ router.post("/update", verifyIdTokenDetails, async (req, res) => {
         } else if (status === 'approve') {
             currentDocRef = db.collection(config.collections.studentDetailsApprovalStatus);
             newDocRef = db.collection(config.collections.studentDetailsActiveStatus);
+            approveToActiveFlag = true;
             validateFlag = true;
         }
 
         const UpdateDetails = async (currentDocRef, newDocRef, studentCode) => { //Update
+
+            if (approveToActiveFlag) {
+                const studentNameFromDbRef = currentDocRef.where("studentCode", "==", studentCode).select('studentName');
+                const studentNameFromDbSnapshot = await studentNameFromDbRef.get();;
+                const studentNameFromDb = studentNameFromDbSnapshot.docs.length > 0 ? studentNameFromDbSnapshot.docs[0].data().studentName : "";
+                const docRefViews = db.collection(config.collections.studentDetailsViews).doc(config.documents.studentDetailsViewsData);
+
+                // New string to add to the array
+                const newString = studentNameFromDb + " - " + studentCode;
+
+                docRefViews.set({
+                    data: admin.firestore.FieldValue.arrayUnion(newString)
+                }, { merge: true }) // Merge: true ensures existing fields are preserved and only the array is updated
+            }
+
             let docRef = currentDocRef.doc(studentCode);
 
             const docSnapshot = await docRef.get();
