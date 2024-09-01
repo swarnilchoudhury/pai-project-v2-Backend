@@ -142,7 +142,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
             const newString = studentName + " - " + studentCode;
 
             docRefViews.set({
-                studentViews: admin.firestore.FieldValue.arrayUnion(newString)
+                data: admin.firestore.FieldValue.arrayUnion(newString)
             }, { merge: true }) // Merge: true ensures existing fields are preserved and only the array is updated
             
                     const message = adminRole(req) //Admin role

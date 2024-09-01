@@ -7,6 +7,6 @@
         "studentDetailsViews": "student_details_views"
     },
     "documents":{
-        "studentDetailsViewsData" : "data"
+        "studentDetailsViewsData" : "studentDetailsViews"
     }
 }
