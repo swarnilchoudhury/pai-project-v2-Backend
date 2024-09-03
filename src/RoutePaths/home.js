@@ -29,7 +29,8 @@ router.get("/home", verifyIdToken, async (req, res) => {
             'guardianName',
             'dob',
             'admissionDate',
-            'createdDateTimeFormatted')
+            'createdDateTimeFormatted',
+            'createdBy')
             .get();
 
         // Map the snapshot to an array of document data
