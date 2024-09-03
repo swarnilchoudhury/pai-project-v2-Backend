@@ -34,14 +34,11 @@ const verifyIdTokenDetails = async (req, res, next) => {
         let result = await docRef.get();
 
         if (result.exists) {
-          if (req.originalUrl.includes("/login")) { //Login URL
-            let name = result.data().name; //Fetch Name
-            req.Name = name;
-          }
-          else {
-            let role = result.data().role; //Fetch Role
-            req.Role = role;
-          }
+          req.Role = result.data().role; //Fetch Role
+          req.Name = result.data().name; //Fetch Name
+        }
+        else {
+          return res.sendStatus(400);
         }
       }
       catch {

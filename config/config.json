@@ -3,10 +3,6 @@
         "userName": "userName",
         "studentDetailsActiveStatus": "student_details_active",
         "studentDetailsDeactiveStatus": "student_details_deactive",
-        "studentDetailsApprovalStatus": "student_details_approval",
-        "studentDetailsViews": "student_details_views"
-    },
-    "documents":{
-        "studentDetailsViewsData" : "studentDetailsViews"
+        "studentDetailsApprovalStatus": "student_details_approval"
     }
 }
