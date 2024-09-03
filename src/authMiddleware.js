@@ -34,10 +34,8 @@ const verifyIdTokenDetails = async (req, res, next) => {
         let result = await docRef.get();
 
         if (result.exists) {
-          let role = result.data().role; //Fetch Role
-          let name = result.data().name; //Fetch Name
-          req.Name = name;
-          req.Role = role;
+          req.Role = result.data().role; //Fetch Role
+          req.Name = result.data().name; //Fetch Name
         }
         else {
           return res.sendStatus(400);

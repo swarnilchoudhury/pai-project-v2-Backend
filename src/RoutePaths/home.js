@@ -22,7 +22,8 @@ router.get("/home", verifyIdToken, async (req, res) => {
             docRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentName', 'asc');
         }
 
-        const snapshot = await docRef.select('studentName',
+        const snapshot = await docRef.select(
+            'studentName',
             'studentCode',
             'phoneNumber',
             'guardianName',
@@ -100,11 +101,11 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
             phoneNumber = "-";
         }
 
-        if (admissionDate.length === 0) {
+        if (admissionDate.length === 0 || admissionDate.includes("Invalid Date")) {
             admissionDate = "-";
         }
 
-        if (dob.length === 0) {
+        if (dob.length === 0 || dob.includes("Invalid Date")) {
             dob = "-";
         }
 
@@ -119,6 +120,8 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
             second: "2-digit"
         });
 
+        const studentView = studentName + " - " + studentCode;
+
         const document = {
             studentName,
             studentCode,
@@ -127,6 +130,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
             phoneNumber,
             admissionDate,
             dob,
+            studentView,
             createdDateTime: currentTime,
             createdDateTimeFormatted: createdDateTimeFormat,
             createdBy: req.Name.toUpperCase()
@@ -144,19 +148,8 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
 
         // Confirm the document was written successfully
         const docSnapshot = await docRef.get();
+
         if (docSnapshot.exists) {
-
-            if (collectionName.includes(config.collections.studentDetailsActiveStatus)) {
-                const docRefViews = db.collection(config.collections.studentDetailsViews).doc(config.documents.studentDetailsViewsData);
-
-                // New string to add to the array
-                const newString = studentName + " - " + studentCode;
-
-                docRefViews.set({
-                    data: admin.firestore.FieldValue.arrayUnion(newString)
-                }, { merge: true }) // Merge: true ensures existing fields are preserved and only the array is updated
-
-            }
 
             const message = adminRole(req) //Admin role
                 ? `${studentCode} has been created`
@@ -180,7 +173,6 @@ router.post("/update", verifyIdTokenDetails, async (req, res) => {
 
         let status = req.headers['x-update'].toLowerCase(); //Fetch Status from UI
         let validateFlag = false;
-        let approveToActiveFlag = false;
         let currentDocRef, newDocRef;
 
         if (status === 'deactive') {
@@ -193,25 +185,10 @@ router.post("/update", verifyIdTokenDetails, async (req, res) => {
         } else if (status === 'approve') {
             currentDocRef = db.collection(config.collections.studentDetailsApprovalStatus);
             newDocRef = db.collection(config.collections.studentDetailsActiveStatus);
-            approveToActiveFlag = true;
             validateFlag = true;
         }
 
         const UpdateDetails = async (currentDocRef, newDocRef, studentCode) => { //Update
-
-            if (approveToActiveFlag) {
-                const studentNameFromDbRef = currentDocRef.where("studentCode", "==", studentCode).select('studentName');
-                const studentNameFromDbSnapshot = await studentNameFromDbRef.get();;
-                const studentNameFromDb = studentNameFromDbSnapshot.docs.length > 0 ? studentNameFromDbSnapshot.docs[0].data().studentName : "";
-                const docRefViews = db.collection(config.collections.studentDetailsViews).doc(config.documents.studentDetailsViewsData);
-
-                // New string to add to the array
-                const newString = studentNameFromDb + " - " + studentCode;
-
-                docRefViews.set({
-                    data: admin.firestore.FieldValue.arrayUnion(newString)
-                }, { merge: true }) // Merge: true ensures existing fields are preserved and only the array is updated
-            }
 
             let docRef = currentDocRef.doc(studentCode);
 
