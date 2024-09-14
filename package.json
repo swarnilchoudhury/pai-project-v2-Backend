@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node api.js",
-    "build": "netlify deploy --prod"
+    "build": "echo 'No build step defined'"
   },
   "author": "Swarnil",
   "license": "ISC",
@@ -14,6 +14,7 @@
     "express": "^4.19.2",
     "firebase-admin": "^12.1.1",
     "netlify-lambda": "^2.0.16",
+    "path": "^0.12.7",
     "serverless-http": "^3.2.0"
   }
 }

@@ -1,8 +1,8 @@
 {
-    "Collections": {
-        "UserName": "UserName",
-        "StudentDetailsActiveStatus": "StudentDetailsActive",
-        "StudentDetailsDeactiveStatus": "StudentDetailsDeactive",
-        "StudentDetailsApprovalStatus": "StudentDetailsApproval"
+    "collections": {
+        "userName": "userName",
+        "studentDetailsActiveStatus": "student_details_active",
+        "studentDetailsDeactiveStatus": "student_details_deactive",
+        "studentDetailsApprovalStatus": "student_details_approval"
     }
 }
