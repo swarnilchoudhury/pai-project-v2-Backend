@@ -1,12 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
-const { db, currentTime, admin } = require('../credentials/firebaseCredentials');
-const { verifyIdToken, verifyIdTokenDetails } = require('../authMiddleware');
+const { db, currentTime } = require('../credentials/firebaseCredentials');
 const { adminRole } = require('../roleFunctions');
 
 //Home Page to Fetch Details
-router.get("/home", verifyIdToken, async (req, res) => {
+router.get("/home", async (req, res) => {
 
     try {
         let docRef;
@@ -46,7 +45,7 @@ router.get("/home", verifyIdToken, async (req, res) => {
 
 
 //Search Code
-router.post("/searchCode", verifyIdToken, async (req, res) => {
+router.post("/searchCode", async (req, res) => {
 
     try {
         let studentCode = req.body.studentCode; //Fetch student Code from UI
@@ -70,7 +69,7 @@ router.post("/searchCode", verifyIdToken, async (req, res) => {
 );
 
 //Latest StudentCode
-router.get("/latestCode", verifyIdToken, async (req, res) => {
+router.get("/latestCode", async (req, res) => {
 
     try {
         const docRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentCodeNumeric', 'desc').limit(1);
@@ -87,7 +86,7 @@ router.get("/latestCode", verifyIdToken, async (req, res) => {
 );
 
 //Create new documents
-router.post("/create", verifyIdTokenDetails, async (req, res) => {
+router.post("/req/create", async (req, res) => {
     try {
         let { studentName, studentCode, guardianName, phoneNumber, admissionDate, dob } = req.body; //Fetch required details from UI
 
@@ -165,7 +164,7 @@ router.post("/create", verifyIdTokenDetails, async (req, res) => {
 });
 
 //For Changing of Status for Student
-router.post("/update", verifyIdTokenDetails, async (req, res) => {
+router.post("/req/update", async (req, res) => {
     try {
         if (!adminRole(req)) {
             return res.status(200).json({ message: "Not Authorized" });

@@ -1,9 +1,8 @@
 const express = require('express');
-const { verifyIdTokenDetails } = require('../authMiddleware');
 const router = express.Router();
 
 //For Login
-router.get("/login", verifyIdTokenDetails, async (req, res) => {
+router.get("/req/login", async (req, res) => {
 
     if (req != null && req != undefined) {
 

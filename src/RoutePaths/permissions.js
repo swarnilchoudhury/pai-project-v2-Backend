@@ -1,10 +1,9 @@
 const express = require('express');
-const { verifyIdTokenDetails } = require('../authMiddleware');
 const { adminRole } = require('../roleFunctions');
 const router = express.Router();
 
 //For permissions
-router.get("/permissions", verifyIdTokenDetails, async (req, res) => {
+router.get("/req/permissions", async (req, res) => {
 
     if (req != null && req != undefined) {
 
