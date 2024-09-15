@@ -108,6 +108,8 @@ router.post("/req/create", async (req, res) => {
             dob = "-";
         }
 
+        let createdByName = req.Name ? req.Name.toUpperCase() : "-";
+
         // Create timestamp for the document
         const createdDateTimeFormat = new Date().toLocaleString("en-US", {
             timeZone: "Asia/Kolkata",
@@ -132,7 +134,7 @@ router.post("/req/create", async (req, res) => {
             studentView,
             createdDateTime: currentTime,
             createdDateTimeFormatted: createdDateTimeFormat,
-            createdBy: req.Name.toUpperCase()
+            createdBy: createdByName
         }; //Add the required details to the document
 
         // Determine the target collection based on user role
