@@ -75,9 +75,9 @@ router.get("/latestCode", async (req, res) => {
         const docRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentCodeNumeric', 'desc').limit(1);
         const snapshot = await docRef.get();
 
-        let latestStudentCode = snapshot.docs.length > 0 ? snapshot.docs[0].data().studentCodeNumeric : "";
+        let latestStudentCode = snapshot.docs.length > 0 ? snapshot.docs[0].data().studentCode : "";
 
-        return res.json({ latestStudentCode: "PAI-" + latestStudentCode });
+        return res.json({ latestStudentCode: latestStudentCode });
     }
     catch {
         return res.sendStatus(400);
