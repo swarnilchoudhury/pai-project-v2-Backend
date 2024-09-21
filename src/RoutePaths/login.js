@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-//For Login
+// For Login
 router.get("/req/login", async (req, res) => {
 
     if (req != null && req != undefined) {

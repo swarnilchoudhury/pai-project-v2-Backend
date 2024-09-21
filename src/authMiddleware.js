@@ -5,18 +5,18 @@ const verifyIdToken = async (req, res, next) => {
   try {
     if (req != null && req != undefined) {
 
-      const authToken = req.headers.authorization?.split('Bearer ')[1]; //Fetch Token Details
+      const authToken = req.headers.authorization?.split('Bearer ')[1]; // Fetch Token Details
 
       try {
         if (req.url.includes('/req/')) {
-          let userDetails = await admin.auth().verifyIdToken(authToken); //Fetch User Details
+          let userDetails = await admin.auth().verifyIdToken(authToken); // Fetch User Details
 
           const docRef = db.collection(config.collections.userName).doc(userDetails.email);
           let result = await docRef.get();
 
           if (result.exists) {
-            req.Role = result.data().role; //Fetch Role
-            req.Name = result.data().name; //Fetch Name
+            req.Role = result.data().role; // Fetch Role
+            req.Name = result.data().name; // Fetch Name
           }
           else {
             return res.sendStatus(400);

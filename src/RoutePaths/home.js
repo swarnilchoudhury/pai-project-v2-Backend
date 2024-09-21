@@ -6,12 +6,12 @@ const { db, currentTime } = require('../credentials/firebaseCredentials');
 const { adminRole } = require('../roleFunctions');
 const { insertAuditDetails } = require('../commonFunctions');
 
-//Home Page to Fetch Details
+// Home Page to Fetch Details
 router.get("/home", async (req, res) => {
 
     try {
         let docRef;
-        let status = req.headers['x-status'].toLowerCase(); //Fetch Status from UI
+        let status = req.headers['x-status'].toLowerCase(); // Fetch Status from UI
 
         if (status === 'deactive') {
             docRef = db.collection(config.collections.studentDetailsDeactiveStatus).orderBy('studentName', 'asc');
@@ -49,14 +49,14 @@ router.get("/home", async (req, res) => {
 );
 
 
-//Search Code
+// Search Code
 router.post("/searchCode", async (req, res) => {
 
     try {
-        let { studentCode } = req.body; //Fetch Student Code from req body
+        let { studentCode } = req.body; // Fetch Student Code from req body
 
         if (!studentCode.includes("PAI")) {
-            studentCode = "PAI-" + studentCode; //Append PAI
+            studentCode = "PAI-" + studentCode; // Append PAI
         }
 
         // Validate in active state by Student Code
@@ -89,7 +89,7 @@ router.post("/searchCode", async (req, res) => {
 }
 );
 
-//Latest StudentCode
+// Latest StudentCode
 router.get("/latestCode", async (req, res) => {
 
     try {
@@ -111,15 +111,15 @@ router.get("/latestCode", async (req, res) => {
 }
 );
 
-//Create new documents
+// Create new documents
 router.post("/req/create", async (req, res) => {
     try {
-        let { studentCode } = req.body; //Fetch Student Code from req body
+        let { studentCode } = req.body; // Fetch Student Code from req body
 
         let studentCodeNumeric = parseInt(studentCode);
 
         if (!studentCode.includes("PAI")) {
-            studentCode = "PAI-" + studentCode; //Append PAI
+            studentCode = "PAI-" + studentCode; // Append PAI
         }
 
         // Validate in active state by Student Code
@@ -145,7 +145,7 @@ router.post("/req/create", async (req, res) => {
         }
 
 
-        let { studentName, guardianName, phoneNumber, admissionDate, dob } = req.body; //Fetch required details from req body
+        let { studentName, guardianName, phoneNumber, admissionDate, dob } = req.body; // Fetch required details from req body
 
         if (!phoneNumber || phoneNumber.length === 0) {
             phoneNumber = "-";
@@ -186,14 +186,14 @@ router.post("/req/create", async (req, res) => {
             createdDateTime: currentTime,
             createdDateTimeFormatted: createdDateTimeFormat,
             createdBy: createdByName
-        }; //Add the required details to the document
+        }; // Add the required details to the document
 
         // Determine the target collection based on user role
         const collectionName = adminRole(req)
             ? config.collections.studentDetailsActiveStatus
             : config.collections.studentDetailsApprovalStatus;
 
-        const documentId = uuidv4(); //Generate UUID
+        const documentId = uuidv4(); // Generate UUID
         const docRef = db.collection(collectionName).doc(documentId);
 
         // Write the document to the database
@@ -204,7 +204,7 @@ router.post("/req/create", async (req, res) => {
 
         if (docSnapshot.exists) {
 
-            const message = adminRole(req) //Admin role
+            const message = adminRole(req) // Admin role
                 ? `${studentCode} has been created`
                 : `${studentCode} has been sent for approval`;
 
@@ -219,14 +219,14 @@ router.post("/req/create", async (req, res) => {
     }
 });
 
-//For Changing of Status for Student
+// For Changing of Status for Student
 router.post("/req/update", async (req, res) => {
     try {
         if (!adminRole(req)) {
             return res.status(200).json({ message: "Not Authorized" });
         }
 
-        let status = req.headers['x-update'].toLowerCase(); //Fetch Status from UI
+        let status = req.headers['x-update'].toLowerCase(); // Fetch Status from UI
         let validateFlag = false;
         let currentDocRef, newDocRef;
         let systemComments = '';
@@ -247,7 +247,7 @@ router.post("/req/update", async (req, res) => {
             systemComments = 'Approved';
         }
 
-        const UpdateDetails = async (currentDocRef, newDocRef, documentId) => { //Update
+        const UpdateDetails = async (currentDocRef, newDocRef, documentId) => { // Update
 
             let docRef = currentDocRef.doc(documentId);
 
@@ -261,7 +261,7 @@ router.post("/req/update", async (req, res) => {
         }
 
         let message = "";
-        const movePromises = req.body.data.map(async (studentDetails) => { //Move the data
+        const movePromises = req.body.data.map(async (studentDetails) => { // Move the data
 
             let [documentId, studentCode] = studentDetails.split('/');
 
@@ -270,10 +270,10 @@ router.post("/req/update", async (req, res) => {
                 const newDocumentRef = newDocRef.doc(documentId);
                 let result = await newDocumentRef.get();
 
-                if (result.exists) { //If Exists then don't update
+                if (result.exists) { // If Exists then don't update
                     message += `${studentCode} `;
                 }
-                else { //Update the details
+                else { // Update the details
                     await UpdateDetails(currentDocRef, newDocRef, documentId);
                 }
 
@@ -282,7 +282,7 @@ router.post("/req/update", async (req, res) => {
             }
         });
 
-        await Promise.all(movePromises); //Wait till all the data moves
+        await Promise.all(movePromises); // Wait till all the data moves
 
         if (message) {
             return res.status(200).json({ message: `${message} already present in Active Status` });

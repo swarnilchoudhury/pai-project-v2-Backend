@@ -27,7 +27,7 @@ const insertAuditDetails = async (req, systemComments = '', documentId, studentD
         // Fetch the current audit document
         const auditDocSnapshot = await auditDocRef.get();
 
-        //Audit Data
+        // Audit Data
         const auditData = {
             audits: admin.firestore.FieldValue.arrayUnion(newAuditEntry), // Append new entry to the audits array
             createdDateTime: auditDocSnapshot.data()?.createdDateTime || currentTime, // Set createdDateTime if it doesn't exist
