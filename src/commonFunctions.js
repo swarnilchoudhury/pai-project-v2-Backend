@@ -17,7 +17,7 @@ const insertAuditDetails = async (req, systemComments = '', documentId, studentC
         // Define the new audit entry
         const newAuditEntry = {
             systemComments,
-            updatedBy: req.Name ? req.Name.toUpperCase() : "-",
+            user: req.Name ? req.Name.toUpperCase() : "-",
             updatedDateTime: updatedDateTimeFormat
         };
 
@@ -28,18 +28,18 @@ const insertAuditDetails = async (req, systemComments = '', documentId, studentC
         const auditDocSnapshot = await auditDocRef.get();
 
         // Prepare the data to update
-        const updateData = {
+        const auditData = {
             studentCode,
             audits: admin.firestore.FieldValue.arrayUnion(newAuditEntry) // Append new entry to the audits array
         };
 
         // Check if createdDateTime exists and add it if it doesn't
         if (!auditDocSnapshot.exists || !auditDocSnapshot.data().createdDateTime) {
-            updateData.createdDateTime = currentTime; // Add createdDateTime if it does not exist
+            auditData.createdDateTime = currentTime; // Add createdDateTime if it does not exist
         }
 
         // Update or create the audit document
-        await auditDocRef.set(updateData, { merge: true });
+        await auditDocRef.set(auditData, { merge: true });
 
     } catch {
         throw new Error();
