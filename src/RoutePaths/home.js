@@ -264,12 +264,15 @@ router.post("/req/update", async (req, res) => {
             let [documentId, studentCode] = studentDetails.split('/');
 
             if (validateFlag) {
-                
+
                 const newDocumentRef = newDocRef.doc(documentId);
                 let result = await newDocumentRef.get();
 
                 if (result.exists) {
                     message += `${studentCode} `;
+                }
+                else {
+                    await UpdateDetails(currentDocRef, newDocRef, documentId, studentCode);
                 }
 
             } else {
