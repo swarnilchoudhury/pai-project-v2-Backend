@@ -263,12 +263,15 @@ router.post("/req/update", async (req, res) => {
 
             let [documentId, studentCode] = studentDetails.split('/');
 
-            const newDocumentRef = newDocRef.doc(documentId);
+            if (validateFlag) {
+                
+                const newDocumentRef = newDocRef.doc(documentId);
+                let result = await newDocumentRef.get();
 
-            let result = await newDocumentRef.get();
+                if (result.exists) {
+                    message += `${studentCode} `;
+                }
 
-            if (validateFlag && result.exists) {
-                message += `${studentCode} `;
             } else {
                 await UpdateDetails(currentDocRef, newDocRef, documentId, studentCode);
             }
