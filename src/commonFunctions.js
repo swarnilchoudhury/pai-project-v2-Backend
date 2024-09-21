@@ -27,16 +27,12 @@ const insertAuditDetails = async (req, systemComments = '', documentId, studentD
         // Fetch the current audit document
         const auditDocSnapshot = await auditDocRef.get();
 
-        // Prepare the data to update
+        // Check if the audit document exists and set defaults if necessary
         const auditData = {
-            studentDetails,
-            audits: admin.firestore.FieldValue.arrayUnion(newAuditEntry) // Append new entry to the audits array
+            audits: admin.firestore.FieldValue.arrayUnion(newAuditEntry), // Append new entry to the audits array
+            createdDateTime: auditDocSnapshot.data()?.createdDateTime || currentTime, // Set createdDateTime if it doesn't exist
+            studentDetails: auditDocSnapshot.data()?.studentDetails || studentDetails // Set studentDetails if it doesn't exist
         };
-
-        // Check if createdDateTime exists and add it if it doesn't
-        if (!auditDocSnapshot.exists || !auditDocSnapshot.data().createdDateTime) {
-            auditData.createdDateTime = currentTime; // Add createdDateTime if it does not exist
-        }
 
         // Update or create the audit document
         await auditDocRef.set(auditData, { merge: true });
