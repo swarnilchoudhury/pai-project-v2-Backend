@@ -172,7 +172,7 @@ router.post("/req/create", async (req, res) => {
             second: "2-digit"
         });
 
-        const studentView = studentName + " - " + studentCode;
+        const studentDetails = studentName + " - " + studentCode;
 
         const document = {
             studentName,
@@ -182,7 +182,7 @@ router.post("/req/create", async (req, res) => {
             phoneNumber,
             admissionDate,
             dob,
-            studentView,
+            studentDetails,
             createdDateTime: currentTime,
             createdDateTimeFormatted: createdDateTimeFormat,
             createdBy: createdByName
@@ -208,7 +208,7 @@ router.post("/req/create", async (req, res) => {
                 ? `${studentCode} has been created`
                 : `${studentCode} has been sent for approval`;
 
-            await insertAuditDetails(req, 'Created', documentId, studentView);
+            await insertAuditDetails(req, 'Created', documentId, studentDetails);
 
             return res.json({ message });
         } else {
