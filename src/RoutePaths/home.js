@@ -268,10 +268,10 @@ router.post("/req/update", async (req, res) => {
                 const newDocumentRef = newDocRef.doc(documentId);
                 let result = await newDocumentRef.get();
 
-                if (result.exists) {
+                if (result.exists) { //If Exists then don't update
                     message += `${studentCode} `;
                 }
-                else {
+                else { //Update the details
                     await UpdateDetails(currentDocRef, newDocRef, documentId, studentCode);
                 }
 
