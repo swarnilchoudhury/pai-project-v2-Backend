@@ -208,7 +208,7 @@ router.post("/req/create", async (req, res) => {
                 ? `${studentCode} has been created`
                 : `${studentCode} has been sent for approval`;
 
-            await insertAuditDetails(req, 'Created', documentId, studentCode);
+            await insertAuditDetails(req, 'Created', documentId, studentView);
 
             return res.json({ message });
         } else {
@@ -247,7 +247,7 @@ router.post("/req/update", async (req, res) => {
             systemComments = 'Approved';
         }
 
-        const UpdateDetails = async (currentDocRef, newDocRef, documentId, studentCode) => { //Update
+        const UpdateDetails = async (currentDocRef, newDocRef, documentId) => { //Update
 
             let docRef = currentDocRef.doc(documentId);
 
@@ -257,7 +257,7 @@ router.post("/req/update", async (req, res) => {
             await newDocRef.doc(documentId).set(docData);
             await docRef.delete();
 
-            await insertAuditDetails(req, systemComments, documentId, studentCode);
+            await insertAuditDetails(req, systemComments, documentId);
         }
 
         let message = "";
@@ -274,11 +274,11 @@ router.post("/req/update", async (req, res) => {
                     message += `${studentCode} `;
                 }
                 else { //Update the details
-                    await UpdateDetails(currentDocRef, newDocRef, documentId, studentCode);
+                    await UpdateDetails(currentDocRef, newDocRef, documentId);
                 }
 
             } else {
-                await UpdateDetails(currentDocRef, newDocRef, documentId, studentCode);
+                await UpdateDetails(currentDocRef, newDocRef, documentId);
             }
         });
 

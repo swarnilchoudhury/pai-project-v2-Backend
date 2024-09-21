@@ -1,7 +1,7 @@
 const { db, admin, currentTime } = require("./credentials/firebaseCredentials");
 const config = require('../config/config.json')
 
-const insertAuditDetails = async (req, systemComments = '', documentId, studentCode = '') => {
+const insertAuditDetails = async (req, systemComments = '', documentId, studentDetails = '') => {
     try {
         // Create timestamp for the document
         const updatedDateTimeFormat = new Date().toLocaleString("en-US", {
@@ -29,7 +29,7 @@ const insertAuditDetails = async (req, systemComments = '', documentId, studentC
 
         // Prepare the data to update
         const auditData = {
-            studentCode,
+            studentDetails,
             audits: admin.firestore.FieldValue.arrayUnion(newAuditEntry) // Append new entry to the audits array
         };
 
