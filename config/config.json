@@ -3,6 +3,7 @@
         "userName": "userName",
         "studentDetailsActiveStatus": "student_details_active",
         "studentDetailsDeactiveStatus": "student_details_deactive",
-        "studentDetailsApprovalStatus": "student_details_approval"
+        "studentDetailsApprovalStatus": "student_details_approval",
+        "studentDetailsAudit": "student_details_audit"
     }
 }
