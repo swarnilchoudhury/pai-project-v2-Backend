@@ -208,6 +208,8 @@ router.post("/req/create", async (req, res) => {
                 ? `${studentCode} has been created`
                 : `${studentCode} has been sent for approval`;
 
+            await insertAuditDetails(req, 'Created', documentId, studentCode);
+
             return res.json({ message });
         } else {
             return res.json({ message: 'Failed to write document' });
