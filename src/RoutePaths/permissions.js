@@ -2,7 +2,7 @@ const express = require('express');
 const { adminRole } = require('../roleFunctions');
 const router = express.Router();
 
-//For permissions
+// For permissions
 router.get("/req/permissions", async (req, res) => {
 
     if (req != null && req != undefined) {
@@ -10,7 +10,7 @@ router.get("/req/permissions", async (req, res) => {
         try {
 
             let isEditPermissions = false;
-            if (adminRole(req)) { //Verify admin Roles
+            if (adminRole(req)) { // Verify admin Roles
                 isEditPermissions = true;
             }
 
