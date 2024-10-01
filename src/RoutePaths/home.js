@@ -280,7 +280,7 @@ router.post("/req/update", async (req, res) => {
                     await UpdateDetails(currentDocRef, newDocRef, documentId);
                 }
 
-            } else {
+            } else { // Update the details
                 await UpdateDetails(currentDocRef, newDocRef, documentId);
             }
         });
