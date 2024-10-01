@@ -204,9 +204,9 @@ router.post("/req/create", async (req, res) => {
 
         if (docSnapshot.exists) {
 
-            const message = '';
-            const auditMessage = '';
-            
+            let message = '';
+            let auditMessage = '';
+
             if (adminRole(req)) { // Admin role
                 message = `${studentCode} has been created`;
                 auditMessage = 'Created in Active Status';
