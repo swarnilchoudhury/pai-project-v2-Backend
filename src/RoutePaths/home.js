@@ -267,10 +267,13 @@ router.post("/req/update", async (req, res) => {
 
             if (validateFlag) {
 
-                const newDocumentRef = newDocRef.doc(documentId);
-                let result = await newDocumentRef.get();
+                const newDocumentRef = db.collection(config.collections.studentDetailsActiveStatus)
+                    .where('studentCode', '==', studentCode)
+                    .limit(1); // Limit to 1 document to improve performance
 
-                if (result.exists) { // If Exists then don't update
+                const activeDocSnapshot = await newDocumentRef.get();
+
+                if (!activeDocSnapshot.empty) { // If Exists then don't update
                     message += `${studentCode} `;
                 }
                 else { // Update the details
