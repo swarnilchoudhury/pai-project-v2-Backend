@@ -209,11 +209,11 @@ router.post("/req/create", async (req, res) => {
 
             if (adminRole(req)) { // Admin role
                 message = `${studentCode} has been created`;
-                auditMessage = 'Created in Active Status';
+                auditMessage = 'Created in Active State';
             }
             else {
                 message = `${studentCode} has been sent for approval`;
-                auditMessage = 'Sent in Approval Status';
+                auditMessage = 'Sent in Approval State';
             }
 
             await insertAuditDetails(req, auditMessage, documentId, studentDetails);
