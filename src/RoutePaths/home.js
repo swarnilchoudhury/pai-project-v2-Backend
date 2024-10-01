@@ -204,11 +204,19 @@ router.post("/req/create", async (req, res) => {
 
         if (docSnapshot.exists) {
 
-            const message = adminRole(req) // Admin role
-                ? `${studentCode} has been created`
-                : `${studentCode} has been sent for approval`;
+            let message = '';
+            let auditMessage = '';
 
-            await insertAuditDetails(req, 'Created', documentId, studentDetails);
+            if (adminRole(req)) { // Admin role
+                message = `${studentCode} has been created`;
+                auditMessage = 'Created in Active State';
+            }
+            else {
+                message = `${studentCode} has been sent for approval`;
+                auditMessage = 'Sent in Approval State';
+            }
+
+            await insertAuditDetails(req, auditMessage, documentId, studentDetails);
 
             return res.json({ message });
         } else {
@@ -267,17 +275,20 @@ router.post("/req/update", async (req, res) => {
 
             if (validateFlag) {
 
-                const newDocumentRef = newDocRef.doc(documentId);
-                let result = await newDocumentRef.get();
+                const newDocumentRef = db.collection(config.collections.studentDetailsActiveStatus)
+                    .where('studentCode', '==', studentCode)
+                    .limit(1); // Limit to 1 document to improve performance
 
-                if (result.exists) { // If Exists then don't update
+                const activeDocSnapshot = await newDocumentRef.get();
+
+                if (!activeDocSnapshot.empty) { // If Exists then don't update
                     message += `${studentCode} `;
                 }
                 else { // Update the details
                     await UpdateDetails(currentDocRef, newDocRef, documentId);
                 }
 
-            } else {
+            } else { // Update the details
                 await UpdateDetails(currentDocRef, newDocRef, documentId);
             }
         });
