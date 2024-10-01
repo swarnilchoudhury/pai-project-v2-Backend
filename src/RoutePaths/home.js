@@ -204,11 +204,19 @@ router.post("/req/create", async (req, res) => {
 
         if (docSnapshot.exists) {
 
-            const message = adminRole(req) // Admin role
-                ? `${studentCode} has been created`
-                : `${studentCode} has been sent for approval`;
+            const message = '';
+            const auditMessage = '';
+            
+            if (adminRole(req)) { // Admin role
+                message = `${studentCode} has been created`;
+                auditMessage = 'Created in Active Status';
+            }
+            else {
+                message = `${studentCode} has been sent for approval`;
+                auditMessage = 'Sent in Approval Status';
+            }
 
-            await insertAuditDetails(req, 'Created', documentId, studentDetails);
+            await insertAuditDetails(req, auditMessage, documentId, studentDetails);
 
             return res.json({ message });
         } else {
