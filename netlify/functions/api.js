@@ -4,6 +4,7 @@ const loginRouter = require("../../src/RoutePaths/login");
 const homeRouter = require("../../src/RoutePaths/home");
 const paymentsRouter = require("../../src/RoutePaths/payments");
 const permissionsRouter = require("../../src/RoutePaths/permissions");
+const { verifyIdToken } = require("../../src/authMiddleware");
 
 // Create an instance of the Express app
 const app = express();
@@ -33,7 +34,9 @@ app.use((req, res, next) => {
   }
 
   next();
-})
+});
+
+app.use(verifyIdToken);
 
 // For Login routes
 app.use('/api/', loginRouter);
