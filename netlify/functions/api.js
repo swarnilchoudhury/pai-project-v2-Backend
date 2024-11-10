@@ -2,7 +2,7 @@ const express = require("express");
 const serverless = require("serverless-http");
 const loginRouter = require("../../src/RoutePaths/login");
 const homeRouter = require("../../src/RoutePaths/home");
-const paymentsRouter = require("../../src/RoutePaths/payments");
+const paymentsRouter = require("../../src/RoutePaths/payments");																
 const permissionsRouter = require("../../src/RoutePaths/permissions");
 const { verifyIdToken } = require("../../src/authMiddleware");
 
@@ -47,8 +47,8 @@ app.use('/api/', homeRouter);
 // For Permissions routes
 app.use('/api/', permissionsRouter);
 
-// For Permissions routes
-app.use('/api/', paymentsRouter);
+// For Payments routes					  
+app.use('/api/', paymentsRouter);								 
 
 // Use the router to handle requests to the `/.netlify/functions/api` path
 app.use("/api/", router);

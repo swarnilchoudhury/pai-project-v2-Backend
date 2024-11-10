@@ -269,12 +269,10 @@ router.post("/req/update", async (req, res) => {
         }
 
         let message = "";
-        const movePromises = req.body.data.map(async (studentDetails) => { // Move the data
-
+        for (const studentDetails of req.body.data) {
             let [documentId, studentCode] = studentDetails.split('/');
 
             if (validateFlag) {
-
                 const newDocumentRef = db.collection(config.collections.studentDetailsActiveStatus)
                     .where('studentCode', '==', studentCode)
                     .limit(1); // Limit to 1 document to improve performance
@@ -283,17 +281,14 @@ router.post("/req/update", async (req, res) => {
 
                 if (!activeDocSnapshot.empty) { // If Exists then don't update
                     message += `${studentCode} `;
-                }
-                else { // Update the details
+                } else { // Update the details
                     await UpdateDetails(currentDocRef, newDocRef, documentId);
                 }
 
             } else { // Update the details
                 await UpdateDetails(currentDocRef, newDocRef, documentId);
             }
-        });
-
-        await Promise.all(movePromises); // Wait till all the data moves
+        }
 
         if (message) {
             return res.status(200).json({ message: `${message} already present in Active Status` });
