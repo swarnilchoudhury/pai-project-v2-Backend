@@ -37,10 +37,14 @@ router.post("/req/paymentsViews", async (req, res) => {
         // Filter out active students who are not in the paidStudentIds array
         let unpaidStudents = activeStudentIds.filter(student => !paidStudentIds.includes(student.id));
 
-        // Map and sort the unpaid students by student details
-        let unpaidStudentsArray = unpaidStudents.map(student => student.studentDetails).sort();
-
-        return res.json(unpaidStudentsArray);
+        if (unpaidStudents.length > 0) {
+            // Map and sort the unpaid students by student details
+            let unpaidStudentsArray = unpaidStudents.map(student => student.studentDetails).sort();
+            return res.json(unpaidStudentsArray);
+        }
+        else {
+            return res.json({ message: `All Payments are done on ${month}` });
+        }
     }
     catch {
         return res.sendStatus(400);
@@ -155,6 +159,30 @@ router.post("/req/createPayments", async (req, res) => {
         let newMessage = message.slice(0, -2);
 
         return res.status(200).json({ message: newMessage });
+    }
+    catch {
+        return res.sendStatus(400);
+    }
+
+}
+);
+
+router.get("/req/getStudentsDetails", async (req, res) => {
+
+    try {
+        let docRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentName', 'asc');;
+
+        const snapshot = await docRef
+            .select('studentDetails')
+            .get();
+
+        // Map the snapshot to an array of document data
+        let dataArray = snapshot.docs.map((doc) => {
+            // Merge the document data with its ID
+            return { id: doc.id, ...doc.data() };
+        });
+
+        return res.json(dataArray);
     }
     catch {
         return res.sendStatus(400);
