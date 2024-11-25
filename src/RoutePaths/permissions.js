@@ -1,5 +1,5 @@
 const express = require('express');
-const { adminRole } = require('../roleFunctions');
+const { adminRole } = require('../commonFunctions');
 const router = express.Router();
 
 // For permissions
