@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
 const { db, currentTime, admin } = require('../credentials/firebaseCredentials');
-const { adminRole } = require('../roleFunctions');
-const { insertAuditDetails } = require('../commonFunctions');
+const { insertAuditDetails, adminRole } = require('../commonFunctions');
 
 router.post("/req/paymentsViews", async (req, res) => {
 
@@ -212,6 +211,10 @@ router.post("/req/createPayments", async (req, res) => {
 router.get("/req/studentsDetails", async (req, res) => {
 
     try {
+        if (!adminRole(req)) {
+            return res.status(200).json({ message: "Not Authorized" });
+        }
+
         let docRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentName', 'asc');
 
         const snapshot = await docRef
@@ -235,6 +238,10 @@ router.get("/req/studentsDetails", async (req, res) => {
 router.post("/req/studentsPayments", async (req, res) => {
 
     try {
+        if (!adminRole(req)) {
+            return res.status(200).json({ message: "Not Authorized" });
+        }
+
         let { studentId } = req.body; // Fetch details from req body
 
         let docRef = db.collection(config.collections.studentDetailsPayment).doc(studentId);
@@ -267,6 +274,10 @@ router.post("/req/studentsPayments", async (req, res) => {
 router.post("/req/monthlyPayments", async (req, res) => {
 
     try {
+        if (!adminRole(req)) {
+            return res.status(200).json({ message: "Not Authorized" });
+        }
+
         let { month, isGiven } = req.body;
 
         const monthlyPaymentDoc = db.collection(config.collections.monthlyPaymentDetails).doc(month);
@@ -294,7 +305,7 @@ router.post("/req/monthlyPayments", async (req, res) => {
                 const docData = snapshot.data();
                 const paymentDetails = docData.payments;
 
-                if (paymentDetails && paymentDetails[month]) {
+                if (paymentDetails?.[month]) {
                     const paymentInfo = paymentDetails[month];
 
                     paymentDetailsArray.push({
@@ -368,6 +379,10 @@ router.post("/req/monthlyPayments", async (req, res) => {
 
 
 router.get("/req/totalPayments", async (req, res) => {
+
+    if (!adminRole(req)) {
+        return res.status(200).json({ message: "Not Authorized" });
+    }
 
     const docRef = db.collection(config.collections.totalMonthlyAmountDetails).orderBy('createdDateTime', 'desc').limit(12);
 
