@@ -6,7 +6,7 @@ const router = express.Router();
 router.get("/req/permissions", async (req, res) => {
 
     if (req != null && req != undefined) {
-
+ 
         try {
 
             let isEditPermissions = false;
