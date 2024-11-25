@@ -6,6 +6,7 @@
         "studentDetailsApprovalStatus": "student_details_approval",
         "studentDetailsAudit": "student_details_audit",
         "studentDetailsPayment": "student_details_payment",
-        "monthlyPaymentDetails": "monthly_payment_details"
+        "monthlyPaymentDetails": "monthly_payment_details",
+        "totalMonthlyAmountDetails": "total_monthly_amount_details"
     }
 }
