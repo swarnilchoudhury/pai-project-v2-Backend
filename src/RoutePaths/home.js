@@ -3,8 +3,7 @@ const router = express.Router();
 const config = require("../../config/config.json");
 const { v4: uuidv4 } = require('uuid');
 const { db, currentTime } = require('../credentials/firebaseCredentials');
-const { adminRole } = require('../roleFunctions');
-const { insertAuditDetails } = require('../commonFunctions');
+const { insertAuditDetails,adminRole } = require('../commonFunctions');
 
 // Home Page to Fetch Details
 router.get("/home", async (req, res) => {
