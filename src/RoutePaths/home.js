@@ -185,7 +185,8 @@ router.post("/req/create", async (req, res) => {
             studentDetails,
             createdDateTime: currentTime,
             createdDateTimeFormatted: createdDateTimeFormat,
-            createdBy: createdByName
+            createdBy: createdByName,
+            modifiedDateTimeFormatted: '-'
         }; // Add the required details to the document
 
         // Determine the target collection based on user role
