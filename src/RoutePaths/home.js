@@ -3,7 +3,7 @@ const router = express.Router();
 const config = require("../../config/config.json");
 const { v4: uuidv4 } = require('uuid');
 const { db, currentTime } = require('../credentials/firebaseCredentials');
-const { insertAuditDetails,adminRole } = require('../commonFunctions');
+const { insertAuditDetails, adminRole } = require('../commonFunctions');
 
 // Home Page to Fetch Details
 router.get("/home", async (req, res) => {
@@ -30,6 +30,7 @@ router.get("/home", async (req, res) => {
             'dob',
             'admissionDate',
             'createdDateTimeFormatted',
+            'modifiedDateTimeFormatted',
             'createdBy')
             .get();
 
@@ -184,7 +185,8 @@ router.post("/req/create", async (req, res) => {
             studentDetails,
             createdDateTime: currentTime,
             createdDateTimeFormatted: createdDateTimeFormat,
-            createdBy: createdByName
+            createdBy: createdByName,
+            modifiedDateTimeFormatted: '-'
         }; // Add the required details to the document
 
         // Determine the target collection based on user role
@@ -303,5 +305,84 @@ router.post("/req/update", async (req, res) => {
         return res.sendStatus(400);
     }
 });
+
+
+router.post("/req/updateStudent", async (req, res) => {
+
+    try {
+        const { updateForm, status } = req.body;
+
+        if (status === 0) {
+            return res.status(200).json({ message: `Something went wrong.` });
+        }
+
+        const modifiedDateTimeFormat = new Date().toLocaleString("en-US", {
+            timeZone: "Asia/Kolkata",
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+        });
+
+        let collection = '';
+
+        if (status === 1) {
+            collection = config.collections.studentDetailsActiveStatus;
+        }
+        else if (status === 2) {
+            collection = config.collections.studentDetailsDeactiveStatus;
+        }
+        else {
+            collection = config.collections.studentDetailsApprovalStatus;
+        }
+
+        let modifiedByName = req.Name ? req.Name.toUpperCase() : "-";
+        const docRef = db.collection(collection).doc(updateForm.id);
+        const snapshot = await docRef.get();
+        let oldData = snapshot.data();
+
+        let auditMessage = 'Updated Student';
+
+        for (let key in updateForm) {
+            if (key === 'id') continue;
+
+            auditMessage = auditMessage + `, ${key.toUpperCase()}:- ${oldData[key]} to ${updateForm[key]} `;
+
+        }
+
+        const { id, ...newUpdateForm } = updateForm;
+
+        if (updateForm.studentName && updateForm.studentName !== '') {
+            const studentDetails = updateForm.studentName + " - " + oldData.studentCode;
+            await docRef.update({ ...newUpdateForm, studentDetails: studentDetails, modifiedBy: modifiedByName, modifiedDateTimeFormatted: modifiedDateTimeFormat });
+
+            if (status === 1 || status === 2) {
+                let paymentRef = db.collection(config.collections.studentDetailsPayment).doc(updateForm.id);
+                const paymentDoc = await paymentRef.get();
+                if (paymentDoc.exists) {
+                    await paymentRef.update({ studentName: updateForm.studentName });
+                }
+            }
+
+            insertAuditDetails(req, auditMessage, updateForm.id, studentDetails, true);
+
+        }
+        else {
+            await docRef.update({ ...newUpdateForm, modifiedBy: modifiedByName, modifiedDateTimeFormatted: modifiedDateTimeFormat });
+            insertAuditDetails(req, auditMessage, updateForm.id);
+        }
+
+        let jsonMessage = `Successfully Updated For ${oldData.studentName}`;
+
+        return res.status(200).json({ message: jsonMessage });
+
+    }
+    catch {
+        return res.sendStatus(400);
+    }
+}
+);
 
 module.exports = router;

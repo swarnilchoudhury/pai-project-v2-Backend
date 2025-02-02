@@ -202,7 +202,7 @@ router.post("/req/createPayments", async (req, res) => {
         return res.status(200).json({ message: newMessage });
     }
     catch {
-        return res.sendStatus(400);
+      return res.sendStatus(400);
     }
 
 }
