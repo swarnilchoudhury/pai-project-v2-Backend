@@ -2,14 +2,11 @@ const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
 const { db, currentTime, admin } = require('../credentials/firebaseCredentials');
-const { insertAuditDetails, adminRole } = require('../commonFunctions');
+const { insertAuditDetails } = require('../commonFunctions');
 
 router.post("/req/paymentsViews", async (req, res) => {
 
     try {
-        if (!adminRole(req)) {
-            return res.status(200).json({ message: "Not Authorized" });
-        }
 
         let { month } = req.body; // Fetch Student Code from req body
 
@@ -54,9 +51,6 @@ router.post("/req/paymentsViews", async (req, res) => {
 router.post("/req/createPayments", async (req, res) => {
 
     try {
-        if (!adminRole(req)) {
-            return res.status(200).json({ message: "Not Authorized" });
-        }
 
         let { students, amount, modeOfPayment, month, paymentDate } = req.body; // Fetch details from req body
 
@@ -163,14 +157,9 @@ router.post("/req/createPayments", async (req, res) => {
                         bank: admin.firestore.FieldValue.increment(amount),
                         totalAmount: admin.firestore.FieldValue.increment(amount)
                     };
-                } else if (modeOfPayment === 'Cash') {
-                    totalMonthlyAmountPayment = {
-                        cash: admin.firestore.FieldValue.increment(amount),
-                        totalAmount: admin.firestore.FieldValue.increment(amount)
-                    };
                 } else {
                     totalMonthlyAmountPayment = {
-                        others: admin.firestore.FieldValue.increment(amount),
+                        cash: admin.firestore.FieldValue.increment(amount),
                         totalAmount: admin.firestore.FieldValue.increment(amount)
                     };
                 }
@@ -184,7 +173,6 @@ router.post("/req/createPayments", async (req, res) => {
                         createdDateTime: currentTime,
                         bank: 0,
                         cash: 0,
-                        others: 0,
                         ...totalMonthlyAmountPayment
                     });
                 }
@@ -202,7 +190,7 @@ router.post("/req/createPayments", async (req, res) => {
         return res.status(200).json({ message: newMessage });
     }
     catch {
-      return res.sendStatus(400);
+        return res.sendStatus(400);
     }
 
 }
@@ -211,9 +199,6 @@ router.post("/req/createPayments", async (req, res) => {
 router.get("/req/studentsDetails", async (req, res) => {
 
     try {
-        if (!adminRole(req)) {
-            return res.status(200).json({ message: "Not Authorized" });
-        }
 
         let docRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentName', 'asc');
 
@@ -238,9 +223,6 @@ router.get("/req/studentsDetails", async (req, res) => {
 router.post("/req/studentsPayments", async (req, res) => {
 
     try {
-        if (!adminRole(req)) {
-            return res.status(200).json({ message: "Not Authorized" });
-        }
 
         let { studentId } = req.body; // Fetch details from req body
 
@@ -274,9 +256,6 @@ router.post("/req/studentsPayments", async (req, res) => {
 router.post("/req/monthlyPayments", async (req, res) => {
 
     try {
-        if (!adminRole(req)) {
-            return res.status(200).json({ message: "Not Authorized" });
-        }
 
         let { month, isGiven } = req.body;
 
@@ -309,6 +288,7 @@ router.post("/req/monthlyPayments", async (req, res) => {
                     const paymentInfo = paymentDetails[month];
 
                     paymentDetailsArray.push({
+                        id: docId,
                         studentCode: docData.studentCode,
                         studentName: docData.studentName,
                         modeOfPayment: paymentInfo.modeOfPayment,
@@ -380,9 +360,6 @@ router.post("/req/monthlyPayments", async (req, res) => {
 
 router.get("/req/totalPayments", async (req, res) => {
 
-    if (!adminRole(req)) {
-        return res.status(200).json({ message: "Not Authorized" });
-    }
 
     const docRef = db.collection(config.collections.totalMonthlyAmountDetails).orderBy('createdDateTime', 'desc').limit(12);
 
@@ -403,6 +380,124 @@ router.get("/req/totalPayments", async (req, res) => {
             return res.status(200).json({ message: "Not Found" });
         }
     } catch {
+        return res.sendStatus(400);
+    }
+
+});
+
+router.put("/req/updateStudentPayment", async (req, res) => {
+    let { updateForm } = req.body;
+
+    try {
+        const docRef = db.collection(config.collections.studentDetailsPayment).doc(updateForm.id);
+        const snapshot = await docRef.get();
+        let oldData = snapshot.data();
+
+        let auditMessage = 'Updated Payment';
+
+        for (let key in updateForm) {
+
+            if (key === 'amount' || key === 'modeOfPayment' || key === 'paymentDate') {
+                auditMessage += `, ${key.toUpperCase()}:- ${oldData['payments'][updateForm.month][key]} to ${updateForm[key]} `;
+            }
+        }
+
+        const { id, month, ...newUpdateForm } = updateForm;
+
+        let modifiedByName = req.Name ? req.Name.toUpperCase() : "-";
+
+        const modifiedDateTimeFormat = new Date().toLocaleString("en-US", {
+            timeZone: "Asia/Kolkata",
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+        });
+
+        const updatedPayment = {
+            ...newUpdateForm,
+            updateComments: auditMessage,
+            modifiedBy: modifiedByName,
+            modifiedDateTime: modifiedDateTimeFormat
+        };
+
+        await docRef.set({
+            payments: {
+                [updateForm.month]: updatedPayment
+            }
+        }, { merge: true });
+
+
+        if (updateForm.hasOwnProperty('amount')) {
+
+            const totalMonthlyPaymentDocRef = db.collection(config.collections.totalMonthlyAmountDetails).doc(updateForm.month);
+
+            const updates = {
+                modifiedDateTime: modifiedDateTimeFormat,
+                modifiedBy: modifiedByName
+            };
+
+            const currentPayment = oldData.payments[updateForm.month];
+            const totalMonthlyPaymentSnapshot = await totalMonthlyPaymentDocRef.get();
+            const oldDataTotalMonthlyPayment = totalMonthlyPaymentSnapshot.data();
+
+
+            if (updateForm.hasOwnProperty('modeOfPayment')) {
+                const currentAmount = currentPayment.amount;
+                let updateBank, updateCash;
+
+                if (updateForm.modeOfPayment === 'Bank') {
+                    // if (updateForm.hasOwnProperty('finalAmount')) {
+                    //     updateBank = oldDataTotalMonthlyPayment.bank + updateForm.amount;
+                    //     updateCash = oldDataTotalMonthlyPayment.cash - currentAmount;
+                    // }
+                    // else {
+                    //     updateBank = oldDataTotalMonthlyPayment.bank + updateForm.amount;
+                    //     updateCash = oldDataTotalMonthlyPayment.cash - currentAmount;
+
+                    // }
+  
+                } else {
+                    updateBank = oldDataTotalMonthlyPayment.bank - currentAmount;
+                    updateCash = oldDataTotalMonthlyPayment.cash + updateForm.amount;
+                }
+
+                updates.cash = updateCash;
+                updates.bank = updateBank;
+                updates['totalAmount'] = updateBank + updateCash;
+
+            } else {
+                const currentMode = currentPayment.modeOfPayment;
+                let currentModeOfPayment = '';
+
+                if (currentMode === 'Bank') {
+                    let updateBank = oldDataTotalMonthlyPayment.bank + updateForm.finalAmount;
+                    currentModeOfPayment = 'bank';
+                    updates[currentModeOfPayment] = updateBank;
+                    updates['totalAmount'] = updateBank + oldDataTotalMonthlyPayment.cash;
+                }
+                else {
+                    let updateCash = oldDataTotalMonthlyPayment.cash + updateForm.finalAmount;
+                    currentModeOfPayment = 'cash';
+                    updates[currentModeOfPayment] = updateCash;
+                    updates['totalAmount'] = updateCash + oldDataTotalMonthlyPayment.bank;
+                }
+            }
+
+            await totalMonthlyPaymentDocRef.set(updates, { merge: true });
+        }
+
+
+        let studentDetails = oldData.studentName + '-' + oldData.studentCode;
+
+        // Update the Audit
+        insertAuditDetails(req, auditMessage, updateForm.id, studentDetails);
+
+        return res.status(200).json({ message: `Successfully updated for ${studentDetails}` });
+    }
+    catch {
         return res.sendStatus(400);
     }
 

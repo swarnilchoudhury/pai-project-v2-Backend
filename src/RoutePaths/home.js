@@ -112,7 +112,7 @@ router.get("/latestCode", async (req, res) => {
 );
 
 // Create new documents
-router.post("/req/create", async (req, res) => {
+router.post("/create", async (req, res) => {
     try {
         let { studentCode } = req.body; // Fetch Student Code from req body
 
@@ -231,9 +231,6 @@ router.post("/req/create", async (req, res) => {
 // For Changing of Status for Student
 router.post("/req/update", async (req, res) => {
     try {
-        if (!adminRole(req)) {
-            return res.status(200).json({ message: "Not Authorized" });
-        }
 
         let status = req.headers['x-update'].toLowerCase(); // Fetch Status from UI
         let validateFlag = false;
@@ -307,7 +304,7 @@ router.post("/req/update", async (req, res) => {
 });
 
 
-router.post("/req/updateStudent", async (req, res) => {
+router.put("/req/updateStudent", async (req, res) => {
 
     try {
         const { updateForm, status } = req.body;
@@ -382,7 +379,66 @@ router.post("/req/updateStudent", async (req, res) => {
     catch {
         return res.sendStatus(400);
     }
-}
-);
+});
+
+
+router.post("/req/studentAudit", async (req, res) => {
+    try {
+        let { id } = req.body;
+        const docRef = db.collection(config.collections.studentDetailsAudit).doc(id);
+        const snapshot = await docRef.get();
+        if (!snapshot.exists) {
+            return res.json({ message: "No Data Found" });
+        }
+
+        let auditData = snapshot.data().audits;
+        let reverseAudit = auditData.reverse();
+
+        return res.json(reverseAudit);
+    }
+    catch {
+        return res.sendStatus(400);
+    }
+
+});
+
+router.post("/req/deleteStudent", async (req, res) => {
+    try {
+        let { id, status } = req.body;
+        let systemComments = '';
+
+        if(status === 'Active'){
+            let docRef = db.collection(config.collections.studentDetailsActiveStatus).doc(id);
+
+            const docSnapshot = await docRef.get();
+            const docData = docSnapshot.data();
+
+            await db.collection(config.collections.studentDetailsDelete).doc(id).set(docData);
+            await docRef.delete();
+
+            systemComments = 'Deleted from Active Status and moved to deleted';
+        }
+        else if(status === 'Deactive'){
+            let docRef = db.collection(config.collections.studentDetailsDeactiveStatus).doc(id);
+            await docRef.delete();
+
+            systemComments = 'Deleted from Deactive Status';
+        }
+        else{
+            let docRef = db.collection(config.collections.studentDetailsApprovalStatus).doc(id);
+            await docRef.delete();
+
+            systemComments = 'Deleted from Approval Status';
+        }
+
+        await insertAuditDetails(req, systemComments, id);
+
+        return res.sendStatus(200);
+    }
+    catch { 
+        return res.sendStatus(400);
+    }
+
+});
 
 module.exports = router;
