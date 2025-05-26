@@ -449,15 +449,15 @@ router.put("/req/updateStudentPayment", async (req, res) => {
                 let updateBank, updateCash;
 
                 if (updateForm.modeOfPayment === 'Bank') {
-                    // if (updateForm.hasOwnProperty('finalAmount')) {
-                    //     updateBank = oldDataTotalMonthlyPayment.bank + updateForm.amount;
-                    //     updateCash = oldDataTotalMonthlyPayment.cash - currentAmount;
-                    // }
-                    // else {
-                    //     updateBank = oldDataTotalMonthlyPayment.bank + updateForm.amount;
-                    //     updateCash = oldDataTotalMonthlyPayment.cash - currentAmount;
+                    if (updateForm.hasOwnProperty('finalAmount')) {
+                        updateBank = oldDataTotalMonthlyPayment.bank + updateForm.amount;
+                        updateCash = oldDataTotalMonthlyPayment.cash - updateForm.finalAmount;
+                    }
+                    else {
+                        updateBank = oldDataTotalMonthlyPayment.bank + updateForm.amount;
+                        updateCash = oldDataTotalMonthlyPayment.cash - currentAmount;
 
-                    // }
+                    }
   
                 } else {
                     updateBank = oldDataTotalMonthlyPayment.bank - currentAmount;
