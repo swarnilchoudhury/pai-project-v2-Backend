@@ -235,8 +235,13 @@ router.post("/req/studentsPayments", async (req, res) => {
 
             const paymentsArray = Object.entries(payments)
                 .map(([monthKey, details]) => ({
+                    id: studentId,
                     month: monthKey,
-                    ...details,
+                    amount: details.amount,
+                    modeOfPayment: details.modeOfPayment,
+                    paymentDate: details.paymentDate,
+                    createdDateTime: details.createdDateTime,
+                    modifiedDateTime: details.modifiedDateTime
                 }))
                 .sort((a, b) => new Date(b.createdDateTime) - new Date(a.createdDateTime)); // Sort by createdDateTime in descending order
 
@@ -389,7 +394,10 @@ router.put("/req/updateStudentPayment", async (req, res) => {
     let { updateForm } = req.body;
 
     try {
-        const docRef = db.collection(config.collections.studentDetailsPayment).doc(updateForm.id);
+
+        const { id, month, ...newUpdateForm } = updateForm;
+
+        const docRef = db.collection(config.collections.studentDetailsPayment).doc(id);
         const snapshot = await docRef.get();
         let oldData = snapshot.data();
 
@@ -397,12 +405,10 @@ router.put("/req/updateStudentPayment", async (req, res) => {
 
         for (let key in updateForm) {
 
-            if (key === 'amount' || key === 'modeOfPayment' || key === 'paymentDate') {
-                auditMessage += `, ${key.toUpperCase()}:- ${oldData['payments'][updateForm.month][key]} to ${updateForm[key]} `;
+            if (key === 'modeOfPayment' || key === 'paymentDate') {
+                auditMessage += `, ${key.toUpperCase()}:- ${oldData['payments'][month][key]} to ${updateForm[key]} `;
             }
         }
-
-        const { id, month, ...newUpdateForm } = updateForm;
 
         let modifiedByName = req.Name ? req.Name.toUpperCase() : "-";
 
@@ -425,79 +431,119 @@ router.put("/req/updateStudentPayment", async (req, res) => {
 
         await docRef.set({
             payments: {
-                [updateForm.month]: updatedPayment
+                [month]: updatedPayment
             }
         }, { merge: true });
 
+        let updates = {
+            modifiedDateTime: modifiedDateTimeFormat,
+            modifiedBy: modifiedByName
+        };
 
-        if (updateForm.hasOwnProperty('amount')) {
-
-            const totalMonthlyPaymentDocRef = db.collection(config.collections.totalMonthlyAmountDetails).doc(updateForm.month);
-
-            const updates = {
-                modifiedDateTime: modifiedDateTimeFormat,
-                modifiedBy: modifiedByName
-            };
-
-            const currentPayment = oldData.payments[updateForm.month];
-            const totalMonthlyPaymentSnapshot = await totalMonthlyPaymentDocRef.get();
-            const oldDataTotalMonthlyPayment = totalMonthlyPaymentSnapshot.data();
+        const currentPayment = oldData.payments[month];
+        const totalMonthlyPaymentDocRef = db.collection(config.collections.totalMonthlyAmountDetails).doc(month);
+        const totalMonthlyPaymentSnapshot = await totalMonthlyPaymentDocRef.get();
+        const oldDataTotalMonthlyPayment = totalMonthlyPaymentSnapshot.data();
 
 
-            if (updateForm.hasOwnProperty('modeOfPayment')) {
-                const currentAmount = currentPayment.amount;
-                let updateBank, updateCash;
+        if (updateForm.hasOwnProperty('modeOfPayment')) {
+            const currentAmount = Number(currentPayment.amount);
+            let updateBank, updateCash;
 
-                if (updateForm.modeOfPayment === 'Bank') {
-                    if (updateForm.hasOwnProperty('finalAmount')) {
-                        updateBank = oldDataTotalMonthlyPayment.bank + updateForm.amount;
-                        updateCash = oldDataTotalMonthlyPayment.cash - updateForm.finalAmount;
-                    }
-                    else {
-                        updateBank = oldDataTotalMonthlyPayment.bank + updateForm.amount;
-                        updateCash = oldDataTotalMonthlyPayment.cash - currentAmount;
-
-                    }
-  
-                } else {
-                    updateBank = oldDataTotalMonthlyPayment.bank - currentAmount;
-                    updateCash = oldDataTotalMonthlyPayment.cash + updateForm.amount;
-                }
-
-                updates.cash = updateCash;
-                updates.bank = updateBank;
-                updates['totalAmount'] = updateBank + updateCash;
+            if (updateForm.modeOfPayment === 'Bank') {
+                updateBank = Number(oldDataTotalMonthlyPayment.bank) + currentAmount;
+                updateCash = Number(oldDataTotalMonthlyPayment.cash) - currentAmount;
 
             } else {
-                const currentMode = currentPayment.modeOfPayment;
-                let currentModeOfPayment = '';
-
-                if (currentMode === 'Bank') {
-                    let updateBank = oldDataTotalMonthlyPayment.bank + updateForm.finalAmount;
-                    currentModeOfPayment = 'bank';
-                    updates[currentModeOfPayment] = updateBank;
-                    updates['totalAmount'] = updateBank + oldDataTotalMonthlyPayment.cash;
-                }
-                else {
-                    let updateCash = oldDataTotalMonthlyPayment.cash + updateForm.finalAmount;
-                    currentModeOfPayment = 'cash';
-                    updates[currentModeOfPayment] = updateCash;
-                    updates['totalAmount'] = updateCash + oldDataTotalMonthlyPayment.bank;
-                }
+                updateBank = Number(oldDataTotalMonthlyPayment.bank) - currentAmount;
+                updateCash = Number(oldDataTotalMonthlyPayment.cash) + currentAmount;
             }
 
-            await totalMonthlyPaymentDocRef.set(updates, { merge: true });
+            updates.cash = updateCash < 0 ? 0 : updateCash;
+            updates.bank = updateBank < 0 ? 0 : updateBank;
+            updates['totalAmount'] = updateBank + updateCash;
         }
 
+        await totalMonthlyPaymentDocRef.set(updates, { merge: true });
 
         let studentDetails = oldData.studentName + '-' + oldData.studentCode;
 
         // Update the Audit
-        insertAuditDetails(req, auditMessage, updateForm.id, studentDetails);
+        insertAuditDetails(req, auditMessage, id, studentDetails);
 
         return res.status(200).json({ message: `Successfully updated for ${studentDetails}` });
     }
     catch {
+        
+        return res.sendStatus(400);
+    }
+
+});
+
+router.post("/req/deleteStudentPayment", async (req, res) => {
+
+    try {
+        let { id, month, amount, modeOfPayment, studentName, studentCode,studentDetail } = req.body;
+
+        const studentDetailsDocRef = db.collection(config.collections.studentDetailsPayment).doc(id);
+
+        let auditMessage = `Deleted Payment:- ${[month]}`;
+
+        let modifiedByName = req.Name ? req.Name.toUpperCase() : "-";
+
+        const modifiedDateTimeFormat = new Date().toLocaleString("en-US", {
+            timeZone: "Asia/Kolkata",
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+        });
+
+        await studentDetailsDocRef.update({
+            [`payments.${month}`]: admin.firestore.FieldValue.delete()
+        });
+
+        const monthlyPaymentDocRef = db.collection(config.collections.monthlyPaymentDetails).doc(month);
+
+        await monthlyPaymentDocRef.update({
+            monthlyPayments: admin.firestore.FieldValue.arrayRemove(id)
+        });
+
+        const totalMonthlyPaymentDocRef = db.collection(config.collections.totalMonthlyAmountDetails).doc(month);
+        const totalMonthlyPaymentSnapshot = await totalMonthlyPaymentDocRef.get();
+        const totalMonthlyPayment = totalMonthlyPaymentSnapshot.data();
+
+        let updateBank, updateCash;
+        if (modeOfPayment === 'Bank') {
+            updateBank = Number(totalMonthlyPayment.bank) - Number(amount);
+            updateCash = Number(totalMonthlyPayment.cash);
+        } else {
+            updateCash = Number(totalMonthlyPayment.cash) - Number(amount);
+            updateBank = Number(totalMonthlyPayment.bank);
+        }
+
+        let updates = {
+            modifiedDateTime: modifiedDateTimeFormat,
+            modifiedBy: modifiedByName
+        };
+
+        updates.cash = updateCash < 0 ? 0 : updateCash;
+        updates.bank = updateBank < 0 ? 0 : updateBank;
+        updates['totalAmount'] = updateBank + updateCash;
+
+        await totalMonthlyPaymentDocRef.set(updates, { merge: true });
+
+        let studentDetails = studentDetail || studentName + '-' + studentCode;
+
+        // Update the Audit
+        insertAuditDetails(req, auditMessage, id, studentDetails);
+
+        return res.status(200).json({ message: `Successfully Deleted for ${studentDetails}` });
+    }
+    catch {
+        
         return res.sendStatus(400);
     }
 

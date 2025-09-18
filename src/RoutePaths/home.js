@@ -22,17 +22,36 @@ router.get("/home", async (req, res) => {
             docRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentName', 'asc');
         }
 
-        const snapshot = await docRef.select(
-            'studentName',
-            'studentCode',
-            'phoneNumber',
-            'guardianName',
-            'dob',
-            'admissionDate',
-            'createdDateTimeFormatted',
-            'modifiedDateTimeFormatted',
-            'createdBy')
-            .get();
+        let snapshot;
+
+        if (status === 'deactive') {
+
+            snapshot = await docRef.select(
+                'studentName',
+                'studentCode',
+                'phoneNumber',
+                'guardianName',
+                'dob',
+                'admissionDate',
+                'createdDateTimeFormatted',
+                'lastDeactivatedOn',
+                'createdBy')
+                .get();
+        }
+        else {
+
+            snapshot = await docRef.select(
+                'studentName',
+                'studentCode',
+                'phoneNumber',
+                'guardianName',
+                'dob',
+                'admissionDate',
+                'createdDateTimeFormatted',
+                'modifiedDateTimeFormatted',
+                'createdBy')
+                .get();
+        }
 
         // Map the snapshot to an array of document data
         let homePageDataArray = snapshot.docs.map((doc) => {
@@ -253,14 +272,29 @@ router.post("/req/update", async (req, res) => {
             systemComments = 'Approved';
         }
 
-        const UpdateDetails = async (currentDocRef, newDocRef, documentId) => { // Update
+        const UpdateDetails = async (currentDocRef, newDocRef, documentId, status) => { // Update
 
             let docRef = currentDocRef.doc(documentId);
 
             const docSnapshot = await docRef.get();
             const docData = docSnapshot.data();
 
-            await newDocRef.doc(documentId).set(docData);
+            if (status === 'deactive') {
+
+                let lastDeactivatedOn = new Date().toLocaleString("en-US", {
+                    timeZone: "Asia/Kolkata",
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit"
+                });
+
+                docData.lastDeactivatedOn = lastDeactivatedOn;
+            }
+
+            await newDocRef.doc(documentId).set(docData, { merge: true });
             await docRef.delete();
 
             await insertAuditDetails(req, systemComments, documentId);
@@ -283,11 +317,11 @@ router.post("/req/update", async (req, res) => {
                     message += `${studentCode} `;
                 }
                 else { // Update the details
-                    await UpdateDetails(currentDocRef, newDocRef, documentId);
+                    await UpdateDetails(currentDocRef, newDocRef, documentId, status);
                 }
 
             } else { // Update the details
-                await UpdateDetails(currentDocRef, newDocRef, documentId);
+                await UpdateDetails(currentDocRef, newDocRef, documentId, status);
             }
         });
 
@@ -407,7 +441,7 @@ router.post("/req/deleteStudent", async (req, res) => {
         let { id, status } = req.body;
         let systemComments = '';
 
-        if(status === 'Active'){
+        if (status === 'Active') {
             let docRef = db.collection(config.collections.studentDetailsActiveStatus).doc(id);
 
             const docSnapshot = await docRef.get();
@@ -418,13 +452,13 @@ router.post("/req/deleteStudent", async (req, res) => {
 
             systemComments = 'Deleted from Active Status and moved to deleted';
         }
-        else if(status === 'Deactive'){
+        else if (status === 'Deactive') {
             let docRef = db.collection(config.collections.studentDetailsDeactiveStatus).doc(id);
             await docRef.delete();
 
             systemComments = 'Deleted from Deactive Status';
         }
-        else{
+        else {
             let docRef = db.collection(config.collections.studentDetailsApprovalStatus).doc(id);
             await docRef.delete();
 
@@ -435,7 +469,7 @@ router.post("/req/deleteStudent", async (req, res) => {
 
         return res.sendStatus(200);
     }
-    catch { 
+    catch {
         return res.sendStatus(400);
     }
 
