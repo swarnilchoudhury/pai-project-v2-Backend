@@ -131,7 +131,7 @@ router.get("/latestCode", async (req, res) => {
 );
 
 // Create new documents
-router.post("/create", async (req, res) => {
+router.post("/req/create", async (req, res) => {
     try {
         let { studentCode } = req.body; // Fetch Student Code from req body
 
