@@ -16,6 +16,11 @@ const verifyIdToken = async (req, res, next) => {
 
           if (result.exists) {
             req.Role = result.data().role; // Fetch Role
+            
+            if(req.Role !== "Admin"){
+              return res.sendStatus(401);
+            }
+            
             req.Name = result.data().name; // Fetch Name
           }
           else {
