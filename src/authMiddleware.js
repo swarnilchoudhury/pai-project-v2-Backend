@@ -1,45 +1,46 @@
 const { admin, db } = require("./credentials/firebaseCredentials");
-const config = require("../config/config.json")
+const config = require("../config/config.json");
 
 const verifyIdToken = async (req, res, next) => {
   try {
-    if (req != null && req != undefined) {
 
-      const authToken = req.headers.authorization?.split('Bearer ')[1]; // Fetch Token Details
+    const authToken = req.headers.authorization?.split('Bearer ')[1];
 
-      try {
-        if (req.url.includes('/req/')) {
-          let userDetails = await admin.auth().verifyIdToken(authToken); // Fetch User Details
+    if (!authToken) {
+      return res.sendStatus(401);
+    }
 
-          const docRef = db.collection(config.collections.userName).doc(userDetails.email);
-          let result = await docRef.get();
+    const userDetails = await admin.auth().verifyIdToken(authToken);
 
-          if (result.exists) {
-            req.Role = result.data().role; // Fetch Role
-            
-            if(req.Role !== "Admin"){
-              return res.sendStatus(401);
-            }
-            
-            req.Name = result.data().name; // Fetch Name
-          }
-          else {
-            return res.sendStatus(400);
-          }
-        }
-        else {
-          await admin.auth().verifyIdToken(authToken);
-        }
-      }
-      catch {
-        return res.sendStatus(401);
-      }
+    if (!req.url.includes("/req/")) {
+      return next();
+    }
+
+    const docRef = db.collection(config.collections.userName).doc(userDetails.email);
+
+    const result = await docRef.get();
+
+    if (!result.exists) {
+      return res.sendStatus(400);
+    }
+
+    const { role, name } = result.data();
+
+    req.Role = role;
+    req.Name = name;
+
+    if (req.url.includes("/permissions") || req.url.includes("/login")) {
+      return next();
+    }
+
+    if (role !== "Admin") {
+      return res.sendStatus(401);
     }
 
     next();
-  }
-  catch {
-    return res.sendStatus(400);
+
+  } catch {
+    return res.sendStatus(401);
   }
 };
 
