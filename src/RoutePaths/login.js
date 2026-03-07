@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 // For Login
-router.get("/req/login", async (req, res) => {
+router.get("/login", async (req, res) => {
 
     if (req != null && req != undefined) {
 
