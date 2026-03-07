@@ -18,7 +18,7 @@ jobs:
       - name: Install zip tool
         uses: montudor/action-zip@v1
       - name: Create Zip file for Lambda function
-        run: zip -r code.zip . -x ".git/*" ".github/*" "netlify/*" "netlify.toml" "Code/*" "*.md" ".gitignore" ".env*" "package-lock.json" "deno.lock"
+        run: zip -r code.zip . -x ".git/*" ".github/*" "netlify/*" "netlify.toml" "*.md" ".gitignore" ".env*" "deno.lock"
       - name: AWS CLI v2
         uses: imehedi/actions-awscli-v2@latest
         with:
