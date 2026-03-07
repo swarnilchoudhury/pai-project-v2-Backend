@@ -3,8 +3,10 @@ const router = express.Router();
 const config = require("../../config/config.json");
 const { db, currentTime, admin } = require('../credentials/firebaseCredentials');
 const { insertAuditDetails } = require('../commonFunctions');
+const { adminOnly } = require('../authMiddleware');
+router.use(adminOnly);
 
-router.post("/req/paymentsViews", async (req, res) => {
+router.post("/paymentsViews", async (req, res) => {
 
     try {
 
@@ -48,7 +50,7 @@ router.post("/req/paymentsViews", async (req, res) => {
 }
 );
 
-router.post("/req/createPayments", async (req, res) => {
+router.post("/createPayments", async (req, res) => {
 
     try {
 
@@ -196,7 +198,7 @@ router.post("/req/createPayments", async (req, res) => {
 }
 );
 
-router.get("/req/studentsDetails", async (req, res) => {
+router.get("/studentsDetails", async (req, res) => {
 
     try {
 
@@ -220,7 +222,7 @@ router.get("/req/studentsDetails", async (req, res) => {
 }
 );
 
-router.post("/req/studentsPayments", async (req, res) => {
+router.post("/studentsPayments", async (req, res) => {
 
     try {
 
@@ -258,7 +260,7 @@ router.post("/req/studentsPayments", async (req, res) => {
 }
 );
 
-router.post("/req/monthlyPayments", async (req, res) => {
+router.post("/monthlyPayments", async (req, res) => {
 
     try {
 
@@ -363,7 +365,7 @@ router.post("/req/monthlyPayments", async (req, res) => {
 );
 
 
-router.get("/req/totalPayments", async (req, res) => {
+router.get("/totalPayments", async (req, res) => {
 
 
     const docRef = db.collection(config.collections.totalMonthlyAmountDetails).orderBy('createdDateTime', 'desc').limit(12);
@@ -390,7 +392,7 @@ router.get("/req/totalPayments", async (req, res) => {
 
 });
 
-router.put("/req/updateStudentPayment", async (req, res) => {
+router.put("/updateStudentPayment", async (req, res) => {
     let { updateForm } = req.body;
 
     try {
@@ -480,7 +482,7 @@ router.put("/req/updateStudentPayment", async (req, res) => {
 
 });
 
-router.post("/req/deleteStudentPayment", async (req, res) => {
+router.post("/deleteStudentPayment", async (req, res) => {
 
     try {
         let { id, month, amount, modeOfPayment, studentName, studentCode,studentDetail } = req.body;

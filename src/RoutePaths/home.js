@@ -4,6 +4,7 @@ const config = require("../../config/config.json");
 const { v4: uuidv4 } = require('uuid');
 const { db, currentTime } = require('../credentials/firebaseCredentials');
 const { insertAuditDetails, adminRole } = require('../commonFunctions');
+const { adminOnly } = require('../authMiddleware');
 
 // Home Page to Fetch Details
 router.get("/home", async (req, res) => {
@@ -131,7 +132,7 @@ router.get("/latestCode", async (req, res) => {
 );
 
 // Create new documents
-router.post("/req/create", async (req, res) => {
+router.post("/create", async (req, res) => {
     try {
         let { studentCode } = req.body; // Fetch Student Code from req body
 
@@ -165,6 +166,10 @@ router.post("/req/create", async (req, res) => {
 
 
         let { studentName, guardianName, phoneNumber, admissionDate, dob } = req.body; // Fetch required details from req body
+
+        // Convert to UPPER CASE
+        studentName = studentName ? studentName.toUpperCase() : studentName;
+        guardianName = guardianName ? guardianName.toUpperCase() : guardianName;
 
         if (!phoneNumber || phoneNumber.length === 0) {
             phoneNumber = "-";
@@ -248,9 +253,9 @@ router.post("/req/create", async (req, res) => {
 });
 
 // For Changing of Status for Student
-router.post("/req/update", async (req, res) => {
+router.post("/update", adminOnly, async (req, res) => {
     try {
-
+        
         let status = req.headers['x-update'].toLowerCase(); // Fetch Status from UI
         let validateFlag = false;
         let currentDocRef, newDocRef;
@@ -338,7 +343,7 @@ router.post("/req/update", async (req, res) => {
 });
 
 
-router.put("/req/updateStudent", async (req, res) => {
+router.put("/updateStudent", async (req, res) => {
 
     try {
         const { updateForm, status } = req.body;
@@ -359,13 +364,19 @@ router.put("/req/updateStudent", async (req, res) => {
 
         let collection = '';
 
-        if (status === 1) {
-            collection = config.collections.studentDetailsActiveStatus;
-        }
-        else if (status === 2) {
-            collection = config.collections.studentDetailsDeactiveStatus;
-        }
-        else {
+        // Admin users can access all collections
+        if (adminRole(req)) {
+            if (status === 1) {
+                collection = config.collections.studentDetailsActiveStatus;
+            }
+            else if (status === 2) {
+                collection = config.collections.studentDetailsDeactiveStatus;
+            }
+            else {
+                collection = config.collections.studentDetailsApprovalStatus;
+            }
+        } else {
+            // For non-admin users, restrict to approval status only 
             collection = config.collections.studentDetailsApprovalStatus;
         }
 
@@ -374,19 +385,27 @@ router.put("/req/updateStudent", async (req, res) => {
         const snapshot = await docRef.get();
         let oldData = snapshot.data();
 
+        const { id, ...newUpdateForm } = updateForm;
+
+        // Convert studentName and guardianName to UPPER CASE before building audit message
+        if (newUpdateForm.studentName) {
+            newUpdateForm.studentName = newUpdateForm.studentName.toUpperCase();
+        }
+        if (newUpdateForm.guardianName) {
+            newUpdateForm.guardianName = newUpdateForm.guardianName.toUpperCase();
+        }
+
         let auditMessage = 'Updated Student';
 
-        for (let key in updateForm) {
+        for (let key in newUpdateForm) {
             if (key === 'id') continue;
 
-            auditMessage = auditMessage + `, ${key.toUpperCase()}:- ${oldData[key]} to ${updateForm[key]} `;
+            auditMessage = auditMessage + `, ${key.toUpperCase()}:- ${oldData[key]} to ${newUpdateForm[key]} `;
 
         }
 
-        const { id, ...newUpdateForm } = updateForm;
-
         if (updateForm.studentName && updateForm.studentName !== '') {
-            const studentDetails = updateForm.studentName + " - " + oldData.studentCode;
+            const studentDetails = newUpdateForm.studentName + " - " + oldData.studentCode;
             await docRef.update({ ...newUpdateForm, studentDetails: studentDetails, modifiedBy: modifiedByName, modifiedDateTimeFormatted: modifiedDateTimeFormat });
 
             if (status === 1 || status === 2) {
@@ -416,7 +435,7 @@ router.put("/req/updateStudent", async (req, res) => {
 });
 
 
-router.post("/req/studentAudit", async (req, res) => {
+router.post("/studentAudit", async (req, res) => {
     try {
         let { id } = req.body;
         const docRef = db.collection(config.collections.studentDetailsAudit).doc(id);
@@ -436,10 +455,14 @@ router.post("/req/studentAudit", async (req, res) => {
 
 });
 
-router.post("/req/deleteStudent", async (req, res) => {
+router.post("/deleteStudent", async (req, res) => {
     try {
         let { id, status } = req.body;
         let systemComments = '';
+
+        if (!adminRole(req)) {
+            status = 'Approval';
+        }
 
         if (status === 'Active') {
             let docRef = db.collection(config.collections.studentDetailsActiveStatus).doc(id);

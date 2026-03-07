@@ -12,10 +12,6 @@ const verifyIdToken = async (req, res, next) => {
 
     const userDetails = await admin.auth().verifyIdToken(authToken);
 
-    if (!req.url.includes("/req/")) {
-      return next();
-    }
-
     const docRef = db.collection(config.collections.userName).doc(userDetails.email);
 
     const result = await docRef.get();
@@ -29,14 +25,6 @@ const verifyIdToken = async (req, res, next) => {
     req.Role = role;
     req.Name = name;
 
-    if (req.url.includes("/permissions") || req.url.includes("/login")) {
-      return next();
-    }
-
-    if (role !== "Admin") {
-      return res.sendStatus(401);
-    }
-
     next();
 
   } catch {
@@ -44,4 +32,12 @@ const verifyIdToken = async (req, res, next) => {
   }
 };
 
-module.exports = { verifyIdToken };
+// Middleware to restrict endpoints to Admin users only
+const adminOnly = (req, res, next) => {
+  if (req.Role !== "Admin") {
+    return res.sendStatus(401);
+  }
+  next();
+};
+
+module.exports = { verifyIdToken, adminOnly };

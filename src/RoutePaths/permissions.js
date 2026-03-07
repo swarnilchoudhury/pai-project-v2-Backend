@@ -3,7 +3,7 @@ const { adminRole } = require('../commonFunctions');
 const router = express.Router();
 
 // For permissions
-router.get("/req/permissions", async (req, res) => {
+router.get("/permissions", async (req, res) => {
 
     if (req != null && req != undefined) {
  
