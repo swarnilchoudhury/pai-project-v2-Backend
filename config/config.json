@@ -8,6 +8,10 @@
         "studentDetailsDelete": "student_details_delete",
         "studentDetailsPayment": "student_details_payment",
         "monthlyPaymentDetails": "monthly_payment_details",
-        "totalMonthlyAmountDetails": "total_monthly_amount_details"
+        "totalMonthlyAmountDetails": "total_monthly_amount_details",
+        "batches": "batches",
+        "batchTeachers": "batch_teachers",
+        "batchAudit": "batch_audit",
+        "teacherAudit": "teacher_audit"
     }
 }
