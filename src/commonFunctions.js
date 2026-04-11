@@ -1,7 +1,14 @@
 const { db, admin, currentTime } = require("./credentials/firebaseCredentials");
 const config = require('../config/config.json')
 
-const insertAuditDetails = async (req, systemComments = '', documentId, studentDetails = '', isUpdate = false) => {
+const insertAuditDetails = async (
+    req,
+    systemComments = '',
+    documentId,
+    studentDetails = '',
+    isUpdate = false,
+    collectionName = null
+) => {
     try {
         // Create timestamp for the document
         const updatedDateTimeFormat = new Date().toLocaleString("en-US", {
@@ -21,28 +28,32 @@ const insertAuditDetails = async (req, systemComments = '', documentId, studentD
             updatedDateTime: updatedDateTimeFormat
         };
 
-        // Reference to the audit document
-        const auditDocRef = db.collection(config.collections.studentDetailsAudit).doc(documentId);
+        // Use provided collection name if passed; fallback to student audit collection
+        const collection = collectionName || config.collections.studentDetailsAudit;
+        const auditDocRef = db.collection(collection).doc(documentId);
 
         // Fetch the current audit document
         const auditDocSnapshot = await auditDocRef.get();
 
-        if (!isUpdate) {
+        if (!isUpdate && studentDetails !== null) {
             studentDetails = auditDocSnapshot.data()?.studentDetails || studentDetails // Set studentDetails if it doesn't exist
         }
 
-        // Audit Data
         const auditData = {
-            audits: admin.firestore.FieldValue.arrayUnion(newAuditEntry), // Append new entry to the audits array
-            createdDateTime: auditDocSnapshot.data()?.createdDateTime || currentTime, // Set createdDateTime if it doesn't exist
-            studentDetails: studentDetails
+            audits: admin.firestore.FieldValue.arrayUnion(newAuditEntry),
+            createdDateTime: auditDocSnapshot.data()?.createdDateTime || currentTime,
+            ...(
+                studentDetails !== null &&
+                studentDetails !== undefined &&
+                studentDetails !== '' && { studentDetails }
+            )
         };
 
         // Update or create the audit document
         await auditDocRef.set(auditData, { merge: true });
 
     } catch {
-        throw new Error();
+        throw new Exception();
     }
 };
 
