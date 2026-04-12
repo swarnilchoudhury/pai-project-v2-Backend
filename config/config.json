@@ -9,9 +9,9 @@
         "studentDetailsPayment": "student_details_payment",
         "monthlyPaymentDetails": "monthly_payment_details",
         "totalMonthlyAmountDetails": "total_monthly_amount_details",
+        "teacherDetails": "teacher_details",
+        "teacherDetailsAudit": "teacher_details_audit",
         "batches": "batches",
-        "batchTeachers": "batch_teachers",
-        "batchAudit": "batch_audit",
-        "teacherAudit": "teacher_audit"
+        "batchesAudit": "batches_audit"
     }
 }

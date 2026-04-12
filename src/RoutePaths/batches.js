@@ -21,7 +21,7 @@ const getFormattedTime = () => {
 };
 
 const getTeacherNameMap = async () => {
-    const teachersSnapshot = await db.collection(config.collections.batchTeachers).get();
+    const teachersSnapshot = await db.collection(config.collections.teacherDetails).get();
     const teacherNameById = new Map();
 
     teachersSnapshot.docs.forEach((doc) => {
@@ -106,7 +106,7 @@ router.post("/batches/audit", async (req, res) => {
             return res.status(400).json({ message: "batchId is required" });
         }
 
-        const snapshot = await db.collection(config.collections.batchAudit).doc(batchId).get();
+        const snapshot = await db.collection(config.collections.batchesAudit).doc(batchId).get();
         const audits = snapshot.exists ? (snapshot.data()?.audits || []) : [];
         return res.status(200).json([...audits].reverse());
     } catch {
@@ -174,7 +174,7 @@ router.post("/batches/create", async (req, res) => {
             batchId,
             null,
             false,
-            config.collections.batchAudit
+            config.collections.batchesAudit
         );
 
         return res.json({ message: "Batch created successfully", batchId });
@@ -234,7 +234,7 @@ router.put("/batches/addStudent/:batchId", async (req, res) => {
             batchId,
             null,
             false,
-            config.collections.batchAudit
+            config.collections.batchesAudit
         );
 
         return res.json({ message: "Students added successfully" });
@@ -252,7 +252,7 @@ router.post("/batchTeachers/create", async (req, res) => {
         }
 
         const normalizedTeacherName = teacherName.toUpperCase();
-        const existingTeacherSnapshot = await db.collection(config.collections.batchTeachers)
+        const existingTeacherSnapshot = await db.collection(config.collections.teacherDetails)
             .where("teacherName", "==", normalizedTeacherName)
             .limit(1)
             .get();
@@ -264,7 +264,7 @@ router.post("/batchTeachers/create", async (req, res) => {
         const teacherId = uuidv4();
         const formattedTime = getFormattedTime();
 
-        await db.collection(config.collections.batchTeachers).doc(teacherId).set({
+        await db.collection(config.collections.teacherDetails).doc(teacherId).set({
             teacherName: normalizedTeacherName,
             createdBy: req.Name ? req.Name.toUpperCase() : "SYSTEM",
             createdDateTime: formattedTime
@@ -276,7 +276,7 @@ router.post("/batchTeachers/create", async (req, res) => {
             teacherId,
             null,
             false,
-            config.collections.teacherAudit
+            config.collections.teacherDetailsAudit
         );
 
         return res.status(200).json({ message: "Teacher created successfully" });
@@ -287,7 +287,7 @@ router.post("/batchTeachers/create", async (req, res) => {
 
 router.get("/batchTeachers/all", async (req, res) => {
     try {
-        const teachersSnapshot = await db.collection(config.collections.batchTeachers).get();
+        const teachersSnapshot = await db.collection(config.collections.teacherDetails).get();
         let teachersArray = teachersSnapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data()
