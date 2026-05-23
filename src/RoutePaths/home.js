@@ -6,6 +6,35 @@ const { db, currentTime } = require('../credentials/firebaseCredentials');
 const { insertAuditDetails, adminRole } = require('../commonFunctions');
 const { adminOnly } = require('../authMiddleware');
 
+// Helper function to remove student from all batches
+const removeStudentFromBatches = async (studentId) => {
+    try {
+        const batchesSnapshot = await db.collection(config.collections.batches).get();
+        for (const batchDoc of batchesSnapshot.docs) {
+            const batchData = batchDoc.data();
+            const studentIds = Array.isArray(batchData.studentIds) ? batchData.studentIds : [];
+            
+            if (studentIds.includes(studentId)) {
+                const updatedStudentIds = studentIds.filter(sId => sId !== studentId);
+                await db.collection(config.collections.batches).doc(batchDoc.id).update({
+                    studentIds: updatedStudentIds,
+                    modifiedDateTime: new Date().toLocaleString("en-US", {
+                        timeZone: "Asia/Kolkata",
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit"
+                    })
+                });
+            }
+        }
+    } catch (error) {
+        console.error(`Error removing student ${studentId} from batches:`, error);
+    }
+};
+
 // Home Page to Fetch Details
 router.get("/home", async (req, res) => {
 
@@ -297,6 +326,9 @@ router.post("/update", adminOnly, async (req, res) => {
                 });
 
                 docData.lastDeactivatedOn = lastDeactivatedOn;
+
+                // Remove student from all batches
+                await removeStudentFromBatches(documentId);
             }
 
             await newDocRef.doc(documentId).set(docData, { merge: true });
@@ -459,6 +491,7 @@ router.post("/deleteStudent", async (req, res) => {
     try {
         let { id, status } = req.body;
         let systemComments = '';
+        let docData = null;
 
         if (!adminRole(req)) {
             status = 'Approval';
@@ -468,7 +501,7 @@ router.post("/deleteStudent", async (req, res) => {
             let docRef = db.collection(config.collections.studentDetailsActiveStatus).doc(id);
 
             const docSnapshot = await docRef.get();
-            const docData = docSnapshot.data();
+            docData = docSnapshot.data();
 
             await db.collection(config.collections.studentDetailsDelete).doc(id).set(docData);
             await docRef.delete();
@@ -477,16 +510,23 @@ router.post("/deleteStudent", async (req, res) => {
         }
         else if (status === 'Deactive') {
             let docRef = db.collection(config.collections.studentDetailsDeactiveStatus).doc(id);
+            const docSnapshot = await docRef.get();
+            docData = docSnapshot.data();
             await docRef.delete();
 
             systemComments = 'Deleted from Deactive Status';
         }
         else {
             let docRef = db.collection(config.collections.studentDetailsApprovalStatus).doc(id);
+            const docSnapshot = await docRef.get();
+            docData = docSnapshot.data();
             await docRef.delete();
 
             systemComments = 'Deleted from Approval Status';
         }
+
+        // Remove student from all batches
+        await removeStudentFromBatches(id);
 
         await insertAuditDetails(req, systemComments, id);
 

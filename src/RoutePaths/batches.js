@@ -305,4 +305,238 @@ router.get("/batchTeachers/all", async (req, res) => {
     }
 });
 
+router.post("/batchTeachers/audit", async (req, res) => {
+    try {
+        const { teacherId } = req.body;
+        if (!teacherId) {
+            return res.status(400).json({ message: "teacherId is required" });
+        }
+
+        const snapshot = await db.collection(config.collections.teacherDetailsAudit).doc(teacherId).get();
+        const audits = snapshot.exists ? (snapshot.data()?.audits || []) : [];
+        return res.status(200).json([...audits].reverse());
+    } catch {
+        return res.sendStatus(400);
+    }
+});
+
+router.post("/batchTeachers/delete", async (req, res) => {
+    try {
+        const { teacherId } = req.body;
+        if (!teacherId) {
+            return res.status(400).json({ message: "teacherId is required" });
+        }
+
+        const teacherDoc = await db.collection(config.collections.teacherDetails).doc(teacherId).get();
+        if (!teacherDoc.exists) {
+            return res.json({ message: "Teacher not found" });
+        }
+
+        const teacherData = teacherDoc.data();
+        const teacherName = teacherData.teacherName || '';
+
+        // Delete the teacher
+        await db.collection(config.collections.teacherDetails).doc(teacherId).delete();
+
+        // Add audit entry
+        await insertAuditDetails(
+            req,
+            `Teacher deleted: ${teacherName}`,
+            teacherId,
+            null,
+            false,
+            config.collections.teacherDetailsAudit
+        );
+
+        return res.json({ message: "Teacher deleted successfully" });
+    } catch {
+        return res.sendStatus(400);
+    }
+});
+
+router.put("/batchTeachers/update/:teacherId", async (req, res) => {
+    try {
+        const { teacherId } = req.params;
+        const { teacherName } = req.body;
+
+        if (!teacherId || !teacherName || teacherName.trim().length === 0) {
+            return res.json({ message: "Teacher ID and name are required" });
+        }
+
+        const normalizedTeacherName = teacherName.toUpperCase();
+        const teacherDoc = await db.collection(config.collections.teacherDetails).doc(teacherId).get();
+
+        if (!teacherDoc.exists) {
+            return res.json({ message: "Teacher not found" });
+        }
+
+        const formattedTime = getFormattedTime();
+
+        await db.collection(config.collections.teacherDetails).doc(teacherId).update({
+            teacherName: normalizedTeacherName,
+            modifiedBy: req.Name ? req.Name.toUpperCase() : "SYSTEM",
+            modifiedDateTime: formattedTime
+        });
+
+        await insertAuditDetails(
+            req,
+            `Teacher updated: ${normalizedTeacherName}`,
+            teacherId,
+            null,
+            true,
+            config.collections.teacherDetailsAudit
+        );
+
+        return res.json({ message: "Teacher updated successfully" });
+    } catch {
+        return res.sendStatus(400);
+    }
+});
+
+router.post("/batches/students/delete", async (req, res) => {
+    try {
+        const { id, status } = req.body;
+
+        if (!id || !status) {
+            return res.json({ message: "Student ID and status are required" });
+        }
+
+        // Find the batch containing this student
+        const batchesSnapshot = await db.collection(config.collections.batches).get();
+        let batchId = null;
+        let batchData = null;
+
+        for (const doc of batchesSnapshot.docs) {
+            const data = doc.data();
+            const studentIds = Array.isArray(data.studentIds) ? data.studentIds : [];
+            if (studentIds.includes(id)) {
+                batchId = doc.id;
+                batchData = data;
+                break;
+            }
+        }
+
+        if (!batchId) {
+            return res.json({ message: "Student not found in any batch" });
+        }
+
+        // Get student details
+        const studentDoc = await db.collection(config.collections.studentDetailsActiveStatus).doc(id).get();
+        const studentDetails = studentDoc.exists ? (studentDoc.data().studentDetails || '') : '';
+
+        // Remove student from batch
+        const updatedStudentIds = (Array.isArray(batchData.studentIds) ? batchData.studentIds : [])
+            .filter(sId => sId !== id);
+
+        await db.collection(config.collections.batches).doc(batchId).update({
+            studentIds: updatedStudentIds,
+            modifiedDateTime: getFormattedTime()
+        });
+
+        // Add audit entry for student
+        await insertAuditDetails(
+            req,
+            `Removed from batch: ${batchData.batchName}`,
+            id,
+            studentDetails
+        );
+
+        // Add audit entry for batch
+        await insertAuditDetails(
+            req,
+            `Student removed: ${studentDetails}`,
+            batchId,
+            null,
+            false,
+            config.collections.batchesAudit
+        );
+
+        return res.json({ message: "Student deleted successfully" });
+    } catch {
+        return res.sendStatus(400);
+    }
+});
+
+router.post("/batches/students/move", async (req, res) => {
+    try {
+        const { studentId, fromBatchId, toBatchId } = req.body;
+
+        if (!studentId || !fromBatchId || !toBatchId) {
+            return res.json({ message: "studentId, fromBatchId, and toBatchId are required" });
+        }
+
+        // Get source batch
+        const fromBatchDoc = await db.collection(config.collections.batches).doc(fromBatchId).get();
+        if (!fromBatchDoc.exists) {
+            return res.json({ message: "Source batch not found" });
+        }
+
+        // Get target batch
+        const toBatchDoc = await db.collection(config.collections.batches).doc(toBatchId).get();
+        if (!toBatchDoc.exists) {
+            return res.json({ message: "Target batch not found" });
+        }
+
+        const fromBatchData = fromBatchDoc.data();
+        const toBatchData = toBatchDoc.data();
+
+        // Check if target batch is full
+        const toStudentIds = Array.isArray(toBatchData.studentIds) ? toBatchData.studentIds : [];
+        if (toStudentIds.length >= 24) {
+            return res.json({ message: "Target batch is full (24 students max)" });
+        }
+
+        // Remove from source batch
+        const fromStudentIds = (Array.isArray(fromBatchData.studentIds) ? fromBatchData.studentIds : [])
+            .filter(sId => sId !== studentId);
+
+        await db.collection(config.collections.batches).doc(fromBatchId).update({
+            studentIds: fromStudentIds,
+            modifiedDateTime: getFormattedTime()
+        });
+
+        // Add to target batch
+        const newToStudentIds = [...toStudentIds, studentId];
+        await db.collection(config.collections.batches).doc(toBatchId).update({
+            studentIds: newToStudentIds,
+            modifiedDateTime: getFormattedTime()
+        });
+
+        // Get student details
+        const studentDoc = await db.collection(config.collections.studentDetailsActiveStatus).doc(studentId).get();
+        const studentDetails = studentDoc.exists ? (studentDoc.data().studentDetails || '') : '';
+
+        // Add audit entries for student
+        await insertAuditDetails(
+            req,
+            `Moved from batch: ${fromBatchData.batchName} to ${toBatchData.batchName}`,
+            studentId,
+            studentDetails
+        );
+
+        // Add audit entries for batches
+        await insertAuditDetails(
+            req,
+            `Student moved out: ${studentDetails}`,
+            fromBatchId,
+            null,
+            false,
+            config.collections.batchesAudit
+        );
+
+        await insertAuditDetails(
+            req,
+            `Student moved in: ${studentDetails}`,
+            toBatchId,
+            null,
+            false,
+            config.collections.batchesAudit
+        );
+
+        return res.json({ message: "Student moved successfully" });
+    } catch {
+        return res.sendStatus(400);
+    }
+});
+
 module.exports = router;
