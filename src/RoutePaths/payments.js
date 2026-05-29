@@ -201,20 +201,19 @@ router.post("/monthlyPayments", async (req, res) => {
 
             try {
                 const indexDocRef = db.collection(config.collections.monthlyPaymentStatusIndex).doc(month);
+                const indexSnapshot = await indexDocRef.get();
+
+                // If index doesn't exist yet, return empty (no data to show)
+                if (!indexSnapshot.exists) {
+                    return res.status(200).json({});
+                }
+
                 const notGivenCollRef = indexDocRef.collection("notGiven");
                 const notGivenSnapshot = await notGivenCollRef.get();
 
                 if (notGivenSnapshot.empty) {
-                    // No index yet, get all active students
-                    const activeStudents = db.collection(config.collections.studentDetailsActiveStatus);
-                    const snapshot = await activeStudents.select('studentName', 'studentCode').get();
-
-                    let activeStudentData = snapshot.docs.map((doc) => doc.data());
-                    activeStudentData = activeStudentData.sort((a, b) => {
-                        return a.studentName.localeCompare(b.studentName);
-                    });
-
-                    return res.status(200).json(activeStudentData);
+                    // Index exists but notGiven is empty = all students are paid
+                    return res.status(200).json({});
                 }
 
                 let notGivenDetailsArray = notGivenSnapshot.docs.map(doc => ({
