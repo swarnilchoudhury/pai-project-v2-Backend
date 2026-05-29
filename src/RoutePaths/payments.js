@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
-const { db, currentTime, admin } = require('../credentials/firebaseCredentials');
-const { insertAuditDetails } = require('../commonFunctions');
+const { db, admin } = require('../credentials/firebaseCredentials');
+const { insertAuditDetails, sendQueueWorkerMessage } = require('../commonFunctions');
 const { adminOnly } = require('../authMiddleware');
 router.use(adminOnly);
 
@@ -37,7 +37,7 @@ router.post("/paymentsViews", async (req, res) => {
 
         if (unpaidStudents.length > 0) {
             // Map and sort the unpaid students by student details
-            let unpaidStudentsArray = unpaidStudents.map(student => student.studentDetails).sort();
+            let unpaidStudentsArray = unpaidStudents.map(student => student.studentDetails).sort((a, b) => a.localeCompare(b));
             return res.json(unpaidStudentsArray);
         }
         else {
@@ -54,12 +54,13 @@ router.post("/createPayments", async (req, res) => {
 
     try {
 
-        let { students, amount, modeOfPayment, month, paymentDate } = req.body; // Fetch details from req body
+        let { students, studentIds, amount, modeOfPayment, month, paymentDate } = req.body; // Fetch details from req body
+        const paymentStudents = Array.isArray(studentIds) && studentIds.length > 0 ? studentIds : students;
 
-        if (!students) {
+        if (!Array.isArray(paymentStudents) || paymentStudents.length === 0) {
             return res.status(400).json({ message: 'Students is empty' });
         }
-        else if (!amount || amount === 0.00) {
+        else if (!amount || amount === 0) {
             return res.status(400).json({ message: 'Amount is empty' });
         }
         else if (!modeOfPayment) {
@@ -73,123 +74,19 @@ router.post("/createPayments", async (req, res) => {
             paymentDate = "-";
         }
 
-        // Create timestamp for the document
-        const createdDateTimeFormat = new Date().toLocaleString("en-US", {
-            timeZone: "Asia/Kolkata",
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit"
+        await sendQueueWorkerMessage({
+            eventType: "CreatePayments",
+            students: paymentStudents,
+            amount,
+            modeOfPayment,
+            month,
+            paymentDate,
+            user: req.Name ? req.Name.toUpperCase() : "-"
         });
 
-        const newPayment = {
-            amount,
-            createdDateTime: createdDateTimeFormat, // use the current timestamp or any specific timestamp
-            modeOfPayment,
-            paymentDate
-        };
-
-        let message = `Payment Added for Month ${month}:-  `;
-
-        for (const student of students) {
-
-            let studentDoc = await db.collection(config.collections.studentDetailsActiveStatus)
-                .where("studentDetails", "==", student)
-                .limit(1)
-                .get();
-
-            let docDetails = studentDoc.empty ? null : studentDoc.docs[0].data();
-
-            if (docDetails) {
-                let docid = studentDoc.docs[0].id;
-
-                // Update the individual student details
-                const docRef = db.collection(config.collections.studentDetailsPayment).doc(docid);
-
-                const docSnapshot = await docRef.get();
-
-                if (docSnapshot.exists) {
-
-                    await docRef.update({
-                        [`payments.${month}`]: newPayment,
-                        latestEntry: `${month}, ${amount}, ${modeOfPayment}`
-                    });
-
-                } else {
-                    await docRef.set({
-                        createdDateTime: currentTime,
-                        payments: {
-                            [month]: newPayment,
-                        },
-                        studentCode: docDetails.studentCode,
-                        studentName: docDetails.studentName,
-                        latestEntry: `${month}, ${amount}, ${modeOfPayment}`
-                    });
-                }
-
-                // Update the monthly payment
-                const monthlyDocRef = db.collection(config.collections.monthlyPaymentDetails).doc(month);
-
-                const monthlyDocSnapshot = await monthlyDocRef.get();
-
-                if (monthlyDocSnapshot.exists) {
-
-                    await monthlyDocRef.update({
-                        monthlyPayments: admin.firestore.FieldValue.arrayUnion(docid),
-                    });
-
-                } else {
-                    await monthlyDocRef.set({
-                        createdDateTime: currentTime,
-                        monthlyPayments: [docid],
-                    });
-                }
-
-                // Update the total monthly amount details
-                const totalMonthlyDocRef = db.collection(config.collections.totalMonthlyAmountDetails).doc(month);
-
-                const totalMonthlyDocSnapshot = await totalMonthlyDocRef.get();
-
-                let totalMonthlyAmountPayment;
-
-                if (modeOfPayment === 'Bank') {
-                    totalMonthlyAmountPayment = {
-                        bank: admin.firestore.FieldValue.increment(amount),
-                        totalAmount: admin.firestore.FieldValue.increment(amount)
-                    };
-                } else {
-                    totalMonthlyAmountPayment = {
-                        cash: admin.firestore.FieldValue.increment(amount),
-                        totalAmount: admin.firestore.FieldValue.increment(amount)
-                    };
-                }
-
-                if (totalMonthlyDocSnapshot.exists) {
-                    // Update the document with the new values
-                    await totalMonthlyDocRef.update(totalMonthlyAmountPayment);
-                } else {
-                    // Create a new document with the initial values
-                    await totalMonthlyDocRef.set({
-                        createdDateTime: currentTime,
-                        bank: 0,
-                        cash: 0,
-                        ...totalMonthlyAmountPayment
-                    });
-                }
-
-                // Update the Audit
-                insertAuditDetails(req, `Added Payment, Month:- ${month}, Amount:- ${amount}, Payment Mode:- ${modeOfPayment}`, docid, docDetails.studentDetails);
-
-                message = message + `${docDetails.studentDetails}` + ", ";
-            }
-        }
-
-
-        let newMessage = message.slice(0, -2);
-
-        return res.status(200).json({ message: newMessage });
+        return res.status(200).json({
+            message: `Payment creation has been done for ${paymentStudents.length} student(s).`
+        });
     }
     catch {
         return res.sendStatus(400);
@@ -266,96 +163,74 @@ router.post("/monthlyPayments", async (req, res) => {
 
         let { month, isGiven } = req.body;
 
-        const monthlyPaymentDoc = db.collection(config.collections.monthlyPaymentDetails).doc(month);
-        const monthlySnapshot = await monthlyPaymentDoc.get();
-        const data = monthlySnapshot.data();
-        const monthlyPaymentsArray = data?.monthlyPayments ?? [];
+        if (isGiven === 1) { //If isGiven is 1 - Fetch given payments from index
 
-        if (isGiven === 1) { //If isGiven is 1
+            try {
+                const indexDocRef = db.collection(config.collections.monthlyPaymentStatusIndex).doc(month);
+                const givenCollRef = indexDocRef.collection("given");
+                const givenSnapshot = await givenCollRef.get();
 
-            if (!monthlySnapshot.exists || monthlyPaymentsArray.length === 0) {
-                return res.status(200).json({});
-            }
-
-            let paymentDetailsArray = [];
-
-            for (const docId of monthlyPaymentsArray) {
-
-                const studentDetailsPaymentDoc = db.collection(config.collections.studentDetailsPayment).doc(docId);
-                const snapshot = await studentDetailsPaymentDoc.get();
-
-                if (!snapshot.exists) {
-                    continue;
+                if (givenSnapshot.empty) {
+                    return res.status(200).json({});
                 }
 
-                const docData = snapshot.data();
-                const paymentDetails = docData.payments;
+                let paymentDetailsArray = givenSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    studentCode: doc.data().studentCode,
+                    studentName: doc.data().studentName,
+                    modeOfPayment: doc.data().modeOfPayment,
+                    amount: doc.data().amount,
+                    paymentDate: doc.data().paymentDate,
+                    createdDateTime: doc.data().createdDateTime
+                }));
 
-                if (paymentDetails?.[month]) {
-                    const paymentInfo = paymentDetails[month];
-
-                    paymentDetailsArray.push({
-                        id: docId,
-                        studentCode: docData.studentCode,
-                        studentName: docData.studentName,
-                        modeOfPayment: paymentInfo.modeOfPayment,
-                        amount: paymentInfo.amount,
-                        paymentDate: paymentInfo.paymentDate,
-                        createdDateTime: paymentInfo.createdDateTime
-                    });
-
-                } else {
-                    continue;
-                }
-            }
-
-            paymentDetailsArray = paymentDetailsArray.sort((a, b) => {
-                return a.studentName.localeCompare(b.studentName);
-            });
-
-            return res.status(200).json(paymentDetailsArray);
-
-        }
-        else { //If isGiven is 0
-
-            if (!monthlySnapshot.exists || monthlyPaymentsArray.length === 0) {
-
-                const activeStudents = db.collection(config.collections.studentDetailsActiveStatus);
-                const snapshot = await activeStudents.select(
-                    'studentName',
-                    'studentCode')
-                    .get();
-
-                let activeStudentDocIds = snapshot.docs.map((doc) => doc.data());
-                activeStudentDocIds = activeStudentDocIds.sort((a, b) => {
+                paymentDetailsArray = paymentDetailsArray.sort((a, b) => {
                     return a.studentName.localeCompare(b.studentName);
                 });
 
-                return res.status(200).json(activeStudentDocIds);
+                return res.status(200).json(paymentDetailsArray);
+            }
+            catch (indexError) {
+                console.error("Error reading payment index:", indexError);
+                // Fallback to old method if index doesn't exist
+                return res.status(200).json({});
             }
 
-            const activeStudents = db.collection(config.collections.studentDetailsActiveStatus);
-            const activeStudentSnapshot = await activeStudents.get();
-            const activeStudentDocIds = activeStudentSnapshot.docs.map(doc => doc.id);
-            let unpaidStudents = activeStudentDocIds.filter(docid => !monthlyPaymentsArray.includes(docid));
+        }
+        else { //If isGiven is 0 - Fetch not given payments from index
 
-            const notGivenPromises = unpaidStudents.map(async docId => {
-                const doc = await activeStudents.doc(docId).get();
-                if (doc.exists) {
-                    const { studentName, studentCode } = doc.data();
-                    return { studentName, studentCode };
+            try {
+                const indexDocRef = db.collection(config.collections.monthlyPaymentStatusIndex).doc(month);
+                const notGivenCollRef = indexDocRef.collection("notGiven");
+                const notGivenSnapshot = await notGivenCollRef.get();
+
+                if (notGivenSnapshot.empty) {
+                    // No index yet, get all active students
+                    const activeStudents = db.collection(config.collections.studentDetailsActiveStatus);
+                    const snapshot = await activeStudents.select('studentName', 'studentCode').get();
+
+                    let activeStudentData = snapshot.docs.map((doc) => doc.data());
+                    activeStudentData = activeStudentData.sort((a, b) => {
+                        return a.studentName.localeCompare(b.studentName);
+                    });
+
+                    return res.status(200).json(activeStudentData);
                 }
-                return null;
-            });
 
-            let notGivenDetails = (await Promise.all(notGivenPromises)).filter(detail => detail !== null);
+                let notGivenDetailsArray = notGivenSnapshot.docs.map(doc => ({
+                    studentCode: doc.data().studentCode,
+                    studentName: doc.data().studentName
+                }));
 
-            notGivenDetails = notGivenDetails.sort((a, b) => {
-                return a.studentName.localeCompare(b.studentName);
-            });
+                notGivenDetailsArray = notGivenDetailsArray.sort((a, b) => {
+                    return a.studentName.localeCompare(b.studentName);
+                });
 
-            res.status(200).json(notGivenDetails);
-
+                return res.status(200).json(notGivenDetailsArray);
+            }
+            catch {
+                return res.sendStatus(400);
+            }
         }
 
     } catch {
@@ -373,19 +248,19 @@ router.get("/totalPayments", async (req, res) => {
     try {
         const snapshot = await docRef.get();
 
-        if (!snapshot.empty) {
-            const totalMonthlyPaymentsArray = snapshot.docs.map(doc => {
-                const { createdDateTime, ...otherData } = doc.data(); // Exclude createdDateTime
-                return {
-                    month: doc.id,
-                    ...otherData,
-                };
-            });
-
-            return res.json(totalMonthlyPaymentsArray);
-        } else {
+        if (snapshot.empty) {
             return res.status(200).json({ message: "Not Found" });
         }
+
+        const totalMonthlyPaymentsArray = snapshot.docs.map(doc => {
+            const { createdDateTime, ...otherData } = doc.data(); // Exclude createdDateTime
+            return {
+                month: doc.id,
+                ...otherData,
+            };
+        });
+
+        return res.json(totalMonthlyPaymentsArray);
     } catch {
         return res.sendStatus(400);
     }
@@ -431,52 +306,37 @@ router.put("/updateStudentPayment", async (req, res) => {
             modifiedDateTime: modifiedDateTimeFormat
         };
 
+        // Direct synchronous update for real-time UI feedback
         await docRef.set({
             payments: {
                 [month]: updatedPayment
             }
         }, { merge: true });
 
-        let updates = {
-            modifiedDateTime: modifiedDateTimeFormat,
-            modifiedBy: modifiedByName
-        };
-
-        const currentPayment = oldData.payments[month];
-        const totalMonthlyPaymentDocRef = db.collection(config.collections.totalMonthlyAmountDetails).doc(month);
-        const totalMonthlyPaymentSnapshot = await totalMonthlyPaymentDocRef.get();
-        const oldDataTotalMonthlyPayment = totalMonthlyPaymentSnapshot.data();
-
-
-        if (updateForm.hasOwnProperty('modeOfPayment')) {
-            const currentAmount = Number(currentPayment.amount);
-            let updateBank, updateCash;
-
-            if (updateForm.modeOfPayment === 'Bank') {
-                updateBank = Number(oldDataTotalMonthlyPayment.bank) + currentAmount;
-                updateCash = Number(oldDataTotalMonthlyPayment.cash) - currentAmount;
-
-            } else {
-                updateBank = Number(oldDataTotalMonthlyPayment.bank) - currentAmount;
-                updateCash = Number(oldDataTotalMonthlyPayment.cash) + currentAmount;
-            }
-
-            updates.cash = updateCash < 0 ? 0 : updateCash;
-            updates.bank = updateBank < 0 ? 0 : updateBank;
-            updates['totalAmount'] = updateBank + updateCash;
-        }
-
-        await totalMonthlyPaymentDocRef.set(updates, { merge: true });
-
         let studentDetails = oldData.studentName + '-' + oldData.studentCode;
 
-        // Update the Audit
-        insertAuditDetails(req, auditMessage, id, studentDetails);
+        // Send SQS message for background processing (totals, index, audit)
+        const currentPayment = oldData.payments[month];
+        await sendQueueWorkerMessage({
+            eventType: "UpdatePaymentTotals",
+            id,
+            month,
+            oldMode: currentPayment.modeOfPayment,
+            newMode: updateForm.modeOfPayment || currentPayment.modeOfPayment,
+            amount: currentPayment.amount,
+            paymentDate: updateForm.paymentDate || currentPayment.paymentDate,
+            studentCode: oldData.studentCode,
+            studentName: oldData.studentName,
+            auditMessage: auditMessage,
+            modifiedBy: modifiedByName,
+            modifiedDateTime: modifiedDateTimeFormat,
+            user: req.Name ? req.Name.toUpperCase() : "-"
+        });
 
         return res.status(200).json({ message: `Successfully updated for ${studentDetails}` });
     }
     catch {
-        
+
         return res.sendStatus(400);
     }
 
@@ -485,7 +345,7 @@ router.put("/updateStudentPayment", async (req, res) => {
 router.post("/deleteStudentPayment", async (req, res) => {
 
     try {
-        let { id, month, amount, modeOfPayment, studentName, studentCode,studentDetail } = req.body;
+        let { id, month, amount, modeOfPayment, studentName, studentCode, studentDetail } = req.body;
 
         const studentDetailsDocRef = db.collection(config.collections.studentDetailsPayment).doc(id);
 
@@ -503,49 +363,37 @@ router.post("/deleteStudentPayment", async (req, res) => {
             second: "2-digit"
         });
 
+        // Direct synchronous delete for real-time UI feedback
         await studentDetailsDocRef.update({
             [`payments.${month}`]: admin.firestore.FieldValue.delete()
         });
 
         const monthlyPaymentDocRef = db.collection(config.collections.monthlyPaymentDetails).doc(month);
-
         await monthlyPaymentDocRef.update({
             monthlyPayments: admin.firestore.FieldValue.arrayRemove(id)
         });
 
-        const totalMonthlyPaymentDocRef = db.collection(config.collections.totalMonthlyAmountDetails).doc(month);
-        const totalMonthlyPaymentSnapshot = await totalMonthlyPaymentDocRef.get();
-        const totalMonthlyPayment = totalMonthlyPaymentSnapshot.data();
-
-        let updateBank, updateCash;
-        if (modeOfPayment === 'Bank') {
-            updateBank = Number(totalMonthlyPayment.bank) - Number(amount);
-            updateCash = Number(totalMonthlyPayment.cash);
-        } else {
-            updateCash = Number(totalMonthlyPayment.cash) - Number(amount);
-            updateBank = Number(totalMonthlyPayment.bank);
-        }
-
-        let updates = {
-            modifiedDateTime: modifiedDateTimeFormat,
-            modifiedBy: modifiedByName
-        };
-
-        updates.cash = updateCash < 0 ? 0 : updateCash;
-        updates.bank = updateBank < 0 ? 0 : updateBank;
-        updates['totalAmount'] = updateBank + updateCash;
-
-        await totalMonthlyPaymentDocRef.set(updates, { merge: true });
-
         let studentDetails = studentDetail || studentName + '-' + studentCode;
 
-        // Update the Audit
-        insertAuditDetails(req, auditMessage, id, studentDetails);
+        // Send SQS message for background processing (totals, index, audit)
+        await sendQueueWorkerMessage({
+            eventType: "DeletePaymentTotals",
+            id,
+            month,
+            amount,
+            modeOfPayment,
+            studentCode,
+            studentName,
+            auditMessage: auditMessage,
+            modifiedBy: modifiedByName,
+            modifiedDateTime: modifiedDateTimeFormat,
+            user: req.Name ? req.Name.toUpperCase() : "-"
+        });
 
         return res.status(200).json({ message: `Successfully Deleted for ${studentDetails}` });
     }
     catch {
-        
+
         return res.sendStatus(400);
     }
 

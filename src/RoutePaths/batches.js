@@ -3,7 +3,7 @@ const router = express.Router();
 const config = require("../../config/config.json");
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../credentials/firebaseCredentials');
-const { insertAuditDetails } = require('../commonFunctions');
+const { insertAuditDetails, insertAuditDetailsBatch } = require('../commonFunctions');
 const { adminOnly } = require('../authMiddleware');
 
 router.use(adminOnly);
@@ -207,35 +207,27 @@ router.put("/batches/addStudent/:batchId", async (req, res) => {
             modifiedDateTime: getFormattedTime()
         });
 
-        await Promise.all(
+        const studentDetailsById = await Promise.all(
             idsToAdd.map(async (studentId) => {
                 const studentDoc = await db.collection(config.collections.studentDetailsActiveStatus).doc(studentId).get();
-                const studentDetails = studentDoc.exists ? (studentDoc.data().studentDetails || '') : '';
-                await insertAuditDetails(
-                    req,
-                    `Added to batch: ${batchData.batchName}`,
-                    studentId,
-                    studentDetails
-                );
+                const studentDetails = studentDoc.exists ? (studentDoc.data().studentDetails || studentId) : studentId;
+                return { studentId, studentDetails };
             })
         );
 
-        const studentDetailsForBatchAudit = await Promise.all(
-            idsToAdd.map(async (studentId) => {
-                const studentDoc = await db.collection(config.collections.studentDetailsActiveStatus).doc(studentId).get();
-                if (!studentDoc.exists) return studentId;
-                return studentDoc.data().studentDetails || studentId;
-            })
-        );
-
-        await insertAuditDetails(
-            req,
-            `Students added: ${studentDetailsForBatchAudit.join(", ")}`,
-            batchId,
-            null,
-            false,
-            config.collections.batchesAudit
-        );
+        await insertAuditDetailsBatch(req, [
+            ...studentDetailsById.map(({ studentId, studentDetails }) => ({
+                systemComments: `Added to batch: ${batchData.batchName}`,
+                documentId: studentId,
+                studentDetails
+            })),
+            {
+                systemComments: `Students added: ${studentDetailsById.map(({ studentDetails }) => studentDetails).join(", ")}`,
+                documentId: batchId,
+                studentDetails: null,
+                collectionName: config.collections.batchesAudit
+            }
+        ]);
 
         return res.json({ message: "Students added successfully" });
     } catch {
@@ -433,23 +425,19 @@ router.post("/batches/students/delete", async (req, res) => {
             modifiedDateTime: getFormattedTime()
         });
 
-        // Add audit entry for student
-        await insertAuditDetails(
-            req,
-            `Removed from batch: ${batchData.batchName}`,
-            id,
-            studentDetails
-        );
-
-        // Add audit entry for batch
-        await insertAuditDetails(
-            req,
-            `Student removed: ${studentDetails}`,
-            batchId,
-            null,
-            false,
-            config.collections.batchesAudit
-        );
+        await insertAuditDetailsBatch(req, [
+            {
+                systemComments: `Removed from batch: ${batchData.batchName}`,
+                documentId: id,
+                studentDetails
+            },
+            {
+                systemComments: `Student removed: ${studentDetails}`,
+                documentId: batchId,
+                studentDetails: null,
+                collectionName: config.collections.batchesAudit
+            }
+        ]);
 
         return res.json({ message: "Student deleted successfully" });
     } catch {
@@ -506,32 +494,25 @@ router.post("/batches/students/move", async (req, res) => {
         const studentDoc = await db.collection(config.collections.studentDetailsActiveStatus).doc(studentId).get();
         const studentDetails = studentDoc.exists ? (studentDoc.data().studentDetails || '') : '';
 
-        // Add audit entries for student
-        await insertAuditDetails(
-            req,
-            `Moved from batch: ${fromBatchData.batchName} to ${toBatchData.batchName}`,
-            studentId,
-            studentDetails
-        );
-
-        // Add audit entries for batches
-        await insertAuditDetails(
-            req,
-            `Student moved out: ${studentDetails}`,
-            fromBatchId,
-            null,
-            false,
-            config.collections.batchesAudit
-        );
-
-        await insertAuditDetails(
-            req,
-            `Student moved in: ${studentDetails}`,
-            toBatchId,
-            null,
-            false,
-            config.collections.batchesAudit
-        );
+        await insertAuditDetailsBatch(req, [
+            {
+                systemComments: `Moved from batch: ${fromBatchData.batchName} to ${toBatchData.batchName}`,
+                documentId: studentId,
+                studentDetails
+            },
+            {
+                systemComments: `Student moved out: ${studentDetails}`,
+                documentId: fromBatchId,
+                studentDetails: null,
+                collectionName: config.collections.batchesAudit
+            },
+            {
+                systemComments: `Student moved in: ${studentDetails}`,
+                documentId: toBatchId,
+                studentDetails: null,
+                collectionName: config.collections.batchesAudit
+            }
+        ]);
 
         return res.json({ message: "Student moved successfully" });
     } catch {

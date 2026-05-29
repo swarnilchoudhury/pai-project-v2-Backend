@@ -3,37 +3,8 @@ const router = express.Router();
 const config = require("../../config/config.json");
 const { v4: uuidv4 } = require('uuid');
 const { db, currentTime } = require('../credentials/firebaseCredentials');
-const { insertAuditDetails, adminRole } = require('../commonFunctions');
+const { insertAuditDetails, insertAuditDetailsBatch, adminRole, sendQueueWorkerMessage } = require('../commonFunctions');
 const { adminOnly } = require('../authMiddleware');
-
-// Helper function to remove student from all batches
-const removeStudentFromBatches = async (studentId) => {
-    try {
-        const batchesSnapshot = await db.collection(config.collections.batches).get();
-        for (const batchDoc of batchesSnapshot.docs) {
-            const batchData = batchDoc.data();
-            const studentIds = Array.isArray(batchData.studentIds) ? batchData.studentIds : [];
-            
-            if (studentIds.includes(studentId)) {
-                const updatedStudentIds = studentIds.filter(sId => sId !== studentId);
-                await db.collection(config.collections.batches).doc(batchDoc.id).update({
-                    studentIds: updatedStudentIds,
-                    modifiedDateTime: new Date().toLocaleString("en-US", {
-                        timeZone: "Asia/Kolkata",
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit"
-                    })
-                });
-            }
-        }
-    } catch (error) {
-        console.error(`Error removing student ${studentId} from batches:`, error);
-    }
-};
 
 // Home Page to Fetch Details
 router.get("/home", async (req, res) => {
@@ -284,7 +255,7 @@ router.post("/create", async (req, res) => {
 // For Changing of Status for Student
 router.post("/update", adminOnly, async (req, res) => {
     try {
-        
+
         let status = req.headers['x-update'].toLowerCase(); // Fetch Status from UI
         let validateFlag = false;
         let currentDocRef, newDocRef;
@@ -306,7 +277,10 @@ router.post("/update", adminOnly, async (req, res) => {
             systemComments = 'Approved';
         }
 
-        const UpdateDetails = async (currentDocRef, newDocRef, documentId, status) => { // Update
+        const auditDetails = [];
+        const deactivatedStudentIds = [];
+
+        const UpdateDetails = async (currentDocRef, newDocRef, documentId, status, studentCode) => { // Update
 
             let docRef = currentDocRef.doc(documentId);
 
@@ -327,14 +301,16 @@ router.post("/update", adminOnly, async (req, res) => {
 
                 docData.lastDeactivatedOn = lastDeactivatedOn;
 
-                // Remove student from all batches
-                await removeStudentFromBatches(documentId);
+                deactivatedStudentIds.push(documentId);
             }
 
             await newDocRef.doc(documentId).set(docData, { merge: true });
             await docRef.delete();
 
-            await insertAuditDetails(req, systemComments, documentId);
+            auditDetails.push({
+                systemComments,
+                documentId
+            });
         }
 
         let message = "";
@@ -354,15 +330,25 @@ router.post("/update", adminOnly, async (req, res) => {
                     message += `${studentCode} `;
                 }
                 else { // Update the details
-                    await UpdateDetails(currentDocRef, newDocRef, documentId, status);
+                    await UpdateDetails(currentDocRef, newDocRef, documentId, status, studentCode);
                 }
 
             } else { // Update the details
-                await UpdateDetails(currentDocRef, newDocRef, documentId, status);
+                await UpdateDetails(currentDocRef, newDocRef, documentId, status, studentCode);
             }
         });
 
         await Promise.all(movePromises); // Wait till all the data moves
+
+        if (deactivatedStudentIds.length > 0) {
+            await sendQueueWorkerMessage({
+                eventType: "UpdateStudent",
+                action: "RemoveStudentFromBatches",
+                studentIds: deactivatedStudentIds
+            });
+        }
+
+        await insertAuditDetailsBatch(req, auditDetails);
 
         if (message) {
             return res.status(200).json({ message: `${message} already present in Active Status` });
@@ -525,8 +511,12 @@ router.post("/deleteStudent", async (req, res) => {
             systemComments = 'Deleted from Approval Status';
         }
 
-        // Remove student from all batches
-        await removeStudentFromBatches(id);
+        await sendQueueWorkerMessage({
+            eventType: "UpdateStudent",
+            action: "RemoveStudentFromBatches",
+            studentId: id,
+            status: "delete"
+        });
 
         await insertAuditDetails(req, systemComments, id);
 
