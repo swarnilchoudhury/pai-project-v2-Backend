@@ -2,30 +2,62 @@ name: Deploy Lambda Function
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - development
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Install dependencies
-        run: npm install --production
-      - name: Create Lambda entry point
-        run: |
-          cat netlify/functions/api.js | sed 's|../../src|./src|g' | sed 's|../../config|./config|g' > index.js
-      - name: Install zip tool
-        uses: montudor/action-zip@v1
-      - name: Create Zip file for Lambda function
-        run: zip -r code.zip . -x ".git/*" ".github/*" "netlify/*" "netlify.toml" "*.md" ".gitignore" ".env*" "deno.lock"
-      - name: AWS CLI v2
-        uses: imehedi/actions-awscli-v2@latest
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          args: "lambda update-function-code \
-            --function-name arn:aws:lambda:ap-south-1:309831127762:function:PAI-API \
-            --zip-file fileb://code.zip"
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: "ap-south-1"
+          node-version: 20
+
+      - name: Install Dependencies
+        run: npm install --production
+
+      - name: Create Lambda Entry Point
+        run: |
+          cat netlify/functions/api.js \
+            | sed 's|../../src|./src|g' \
+            | sed 's|../../config|./config|g' \
+            > index.js
+
+      - name: Create Deployment Package
+        run: |
+          zip -r code.zip . \
+            -x ".git/*" \
+            ".github/*" \
+            "netlify/*" \
+            "netlify.toml" \
+            "*.md" \
+            ".gitignore" \
+            ".env*" \
+            "deno.lock"
+
+      - name: Set Lambda Function Name
+        run: |
+          if [ "$GITHUB_REF_NAME" = "development" ]; then
+            echo "FUNCTION_NAME=${{ vars.DEVELOPMENT_LAMBDA_ARN }}" >> $GITHUB_ENV
+          else
+            echo "FUNCTION_NAME=${{ vars.PRODUCTION_LAMBDA_ARN }}" >> $GITHUB_ENV
+          fi
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Deploy Lambda Function
+        run: |
+          aws lambda update-function-code \
+            --function-name "$FUNCTION_NAME" \
+            --zip-file fileb://code.zip
