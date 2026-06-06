@@ -7,22 +7,6 @@ const sqsClient = new SQSClient({
 
 const queueWorkerUrl = process.env.SQS_QUEUE_URL;
 
-const sendQueueWorkerMessage = async (message) => {
-    if (!queueWorkerUrl) {
-        console.warn("SQS_QUEUE_URL is not configured. QueueWorker message skipped.");
-        return;
-    }
-
-    try {
-        await sqsClient.send(new SendMessageCommand({
-            QueueUrl: queueWorkerUrl,
-            MessageBody: JSON.stringify(message)
-        }));
-    } catch (error) {
-        console.error("Error sending QueueWorker message:", error);
-    }
-};
-
 const insertAuditDetails = async (
     req,
     systemComments = '',
@@ -76,6 +60,23 @@ const adminRole = (req) => {
     }
     catch {
         return false;
+    }
+};
+
+
+const sendQueueWorkerMessage = async (message) => {
+    if (!queueWorkerUrl) {
+        console.warn("SQS_QUEUE_URL is not configured. QueueWorker message skipped.");
+        return;
+    }
+
+    try {
+        await sqsClient.send(new SendMessageCommand({
+            QueueUrl: queueWorkerUrl,
+            MessageBody: JSON.stringify(message)
+        }));
+    } catch (error) {
+        console.error("Error sending QueueWorker message:", error);
     }
 };
 

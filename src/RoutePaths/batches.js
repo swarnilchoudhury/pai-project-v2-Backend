@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const config = require("../../config/config.json");
 const { v4: uuidv4 } = require('uuid');
-const { db } = require('../credentials/firebaseCredentials');
+const { db, admin } = require('../credentials/firebaseCredentials');
 const { insertAuditDetails, insertAuditDetailsBatch } = require('../commonFunctions');
 const { adminOnly } = require('../authMiddleware');
 
@@ -30,6 +30,36 @@ const getTeacherNameMap = async () => {
     });
 
     return teacherNameById;
+};
+
+const getStudentDetailsById = async (studentIds) => {
+    const uniqueStudentIds = [...new Set(studentIds.filter(Boolean))];
+
+    if (uniqueStudentIds.length === 0) {
+        return new Map();
+    }
+
+    const refs = uniqueStudentIds.map((studentId) =>
+        db.collection(config.collections.studentDetailsActiveStatus).doc(studentId)
+    );
+
+    const studentDocs = await db.getAll(...refs);
+    const studentDetailsById = new Map();
+
+    studentDocs.forEach((studentDoc) => {
+        if (!studentDoc.exists) {
+            studentDetailsById.set(studentDoc.id, studentDoc.id);
+            return;
+        }
+
+        const studentData = studentDoc.data();
+        studentDetailsById.set(
+            studentDoc.id,
+            studentData.studentDetails || studentDoc.id
+        );
+    });
+
+    return studentDetailsById;
 };
 
 router.get("/batches/all", async (req, res) => {
@@ -82,18 +112,20 @@ router.get("/batches/students/:batchId", async (req, res) => {
             return res.json([]);
         }
 
-        const studentDocs = await Promise.all(
-            studentIds.map(async (studentId) => {
-                const studentDoc = await db.collection(config.collections.studentDetailsActiveStatus).doc(studentId).get();
-                if (!studentDoc.exists) return null;
-                return {
-                    id: studentDoc.id,
-                    ...studentDoc.data()
-                };
-            })
+        const studentDocs = await db.getAll(
+            ...studentIds.map((studentId) =>
+                db.collection(config.collections.studentDetailsActiveStatus).doc(studentId)
+            )
         );
 
-        return res.json(studentDocs.filter(Boolean));
+        return res.json(
+            studentDocs
+                .filter((studentDoc) => studentDoc.exists)
+                .map((studentDoc) => ({
+                    id: studentDoc.id,
+                    ...studentDoc.data()
+                }))
+        );
     } catch {
         return res.sendStatus(400);
     }
@@ -116,29 +148,26 @@ router.post("/batches/audit", async (req, res) => {
 
 router.get("/batches/availableStudents", async (req, res) => {
     try {
-        const batchesSnapshot = await db.collection(config.collections.batches).get();
-        const assignedStudentIds = new Set();
+        const [batchesSnapshot, activeStudentsSnapshot] = await Promise.all([
+            db.collection(config.collections.batches).select("studentIds").get(),
+            db.collection(config.collections.studentDetailsActiveStatus)
+                .orderBy("studentName", "asc")
+                .select("studentDetails")
+                .get()
+        ]);
 
-        batchesSnapshot.docs.forEach((doc) => {
-            const batchData = doc.data();
-            const studentIds = Array.isArray(batchData.studentIds) ? batchData.studentIds : [];
-            studentIds.forEach((studentId) => assignedStudentIds.add(studentId));
-        });
-
-        const activeStudentsSnapshot = await db
-            .collection(config.collections.studentDetailsActiveStatus)
-            .orderBy("studentName", "asc")
-            .get();
+        const assignedStudentIds = new Set(
+            batchesSnapshot.docs.flatMap((doc) => {
+                const studentIds = doc.data().studentIds;
+                return Array.isArray(studentIds) ? studentIds : [];
+            })
+        );
 
         const availableStudents = activeStudentsSnapshot.docs
+            .filter((doc) => !assignedStudentIds.has(doc.id))
             .map((doc) => ({
                 id: doc.id,
-                ...doc.data()
-            }))
-            .filter((student) => !assignedStudentIds.has(student.id))
-            .map((student) => ({
-                id: student.id,
-                studentDetails: student.studentDetails
+                studentDetails: doc.data().studentDetails
             }));
 
         return res.json(availableStudents);
@@ -200,29 +229,62 @@ router.put("/batches/addStudent/:batchId", async (req, res) => {
         const batchData = batchDoc.data();
         const currentStudents = Array.isArray(batchData.studentIds) ? batchData.studentIds : [];
         const idsToAdd = [...new Set(idsPayload.filter(Boolean))];
-        const newStudentIds = [...new Set([...currentStudents, ...idsToAdd])];
+        const newIdsToAdd = idsToAdd.filter((studentId) => !currentStudents.includes(studentId));
 
-        await db.collection(config.collections.batches).doc(batchId).update({
-            studentIds: newStudentIds,
+        if (newIdsToAdd.length === 0) {
+            return res.json({ message: "Students already present in batch" });
+        }
+
+        const batchesSnapshot = await db.collection(config.collections.batches)
+            .select("studentIds")
+            .get();
+
+        const assignedStudentIds = new Set(
+            batchesSnapshot.docs
+                .filter((doc) => doc.id !== batchId)
+                .flatMap((doc) => {
+                    const studentIds = doc.data().studentIds;
+                    return Array.isArray(studentIds) ? studentIds : [];
+                })
+        );
+        const alreadyAssignedStudentIds = newIdsToAdd.filter((studentId) =>
+            assignedStudentIds.has(studentId)
+        );
+
+        if (alreadyAssignedStudentIds.length > 0) {
+            return res.json({
+                message: "One or more students are already assigned to another batch"
+            });
+        }
+
+        if (currentStudents.length + newIdsToAdd.length > 40) {
+            return res.json({ message: "Batch is full (40 students max)" });
+        }
+
+        const batch = db.batch();
+
+        // Update batch document
+        batch.update(db.collection(config.collections.batches).doc(batchId), {
+            studentIds: admin.firestore.FieldValue.arrayUnion(...newIdsToAdd),
             modifiedDateTime: getFormattedTime()
         });
 
-        const studentDetailsById = await Promise.all(
-            idsToAdd.map(async (studentId) => {
-                const studentDoc = await db.collection(config.collections.studentDetailsActiveStatus).doc(studentId).get();
-                const studentDetails = studentDoc.exists ? (studentDoc.data().studentDetails || studentId) : studentId;
-                return { studentId, studentDetails };
-            })
-        );
+        await batch.commit();
+
+        const studentDetailsById = await getStudentDetailsById(newIdsToAdd);
+        const studentAuditDetails = newIdsToAdd.map((studentId) => ({
+            studentId,
+            studentDetails: studentDetailsById.get(studentId) || studentId
+        }));
 
         await insertAuditDetailsBatch(req, [
-            ...studentDetailsById.map(({ studentId, studentDetails }) => ({
+            ...studentAuditDetails.map(({ studentId, studentDetails }) => ({
                 systemComments: `Added to batch: ${batchData.batchName}`,
                 documentId: studentId,
                 studentDetails
             })),
             {
-                systemComments: `Students added: ${studentDetailsById.map(({ studentDetails }) => studentDetails).join(", ")}`,
+                systemComments: `Students added: ${studentAuditDetails.map(({ studentDetails }) => studentDetails).join(", ")}`,
                 documentId: batchId,
                 studentDetails: null,
                 collectionName: config.collections.batchesAudit
@@ -319,7 +381,13 @@ router.post("/batchTeachers/delete", async (req, res) => {
             return res.status(400).json({ message: "teacherId is required" });
         }
 
-        const teacherDoc = await db.collection(config.collections.teacherDetails).doc(teacherId).get();
+        const [teacherDoc, assignedBatchesSnapshot] = await Promise.all([
+            db.collection(config.collections.teacherDetails).doc(teacherId).get(),
+            db.collection(config.collections.batches)
+                .where("teacherIds", "array-contains", teacherId)
+                .get()
+        ]);
+
         if (!teacherDoc.exists) {
             return res.json({ message: "Teacher not found" });
         }
@@ -327,10 +395,35 @@ router.post("/batchTeachers/delete", async (req, res) => {
         const teacherData = teacherDoc.data();
         const teacherName = teacherData.teacherName || '';
 
-        // Delete the teacher
-        await db.collection(config.collections.teacherDetails).doc(teacherId).delete();
+        const writes = [
+            {
+                type: "delete",
+                ref: teacherDoc.ref
+            },
+            ...assignedBatchesSnapshot.docs.map((batchDoc) => ({
+                type: "update",
+                ref: batchDoc.ref
+            }))
+        ];
 
-        // Add audit entry
+        for (let i = 0; i < writes.length; i += 450) {
+            const batch = db.batch();
+
+            writes.slice(i, i + 450).forEach((write) => {
+                if (write.type === "delete") {
+                    batch.delete(write.ref);
+                }
+                else {
+                    batch.update(write.ref, {
+                        teacherIds: admin.firestore.FieldValue.arrayRemove(teacherId),
+                        modifiedDateTime: getFormattedTime()
+                    });
+                }
+            });
+
+            await batch.commit();
+        }
+
         await insertAuditDetails(
             req,
             `Teacher deleted: ${teacherName}`,
@@ -387,43 +480,34 @@ router.put("/batchTeachers/update/:teacherId", async (req, res) => {
 
 router.post("/batches/students/delete", async (req, res) => {
     try {
-        const { id, status } = req.body;
+        const { id } = req.body;
 
-        if (!id || !status) {
-            return res.json({ message: "Student ID and status are required" });
+        if (!id) {
+            return res.json({ message: "Student ID is required" });
         }
 
-        // Find the batch containing this student
-        const batchesSnapshot = await db.collection(config.collections.batches).get();
-        let batchId = null;
-        let batchData = null;
+        const batchSnapshot = await db.collection(config.collections.batches)
+            .where("studentIds", "array-contains", id)
+            .limit(1)
+            .get();
 
-        for (const doc of batchesSnapshot.docs) {
-            const data = doc.data();
-            const studentIds = Array.isArray(data.studentIds) ? data.studentIds : [];
-            if (studentIds.includes(id)) {
-                batchId = doc.id;
-                batchData = data;
-                break;
-            }
-        }
-
-        if (!batchId) {
+        if (batchSnapshot.empty) {
             return res.json({ message: "Student not found in any batch" });
         }
 
-        // Get student details
-        const studentDoc = await db.collection(config.collections.studentDetailsActiveStatus).doc(id).get();
-        const studentDetails = studentDoc.exists ? (studentDoc.data().studentDetails || '') : '';
+        const batchDoc = batchSnapshot.docs[0];
+        const batchId = batchDoc.id;
+        const batchData = batchDoc.data();
+        const studentDetailsById = await getStudentDetailsById([id]);
+        const studentDetails = studentDetailsById.get(id) || id;
 
-        // Remove student from batch
-        const updatedStudentIds = (Array.isArray(batchData.studentIds) ? batchData.studentIds : [])
-            .filter(sId => sId !== id);
-
-        await db.collection(config.collections.batches).doc(batchId).update({
-            studentIds: updatedStudentIds,
+        const batch = db.batch();
+        batch.update(batchDoc.ref, {
+            studentIds: admin.firestore.FieldValue.arrayRemove(id),
             modifiedDateTime: getFormattedTime()
         });
+
+        await batch.commit();
 
         await insertAuditDetailsBatch(req, [
             {
@@ -453,46 +537,50 @@ router.post("/batches/students/move", async (req, res) => {
             return res.json({ message: "studentId, fromBatchId, and toBatchId are required" });
         }
 
-        // Get source batch
-        const fromBatchDoc = await db.collection(config.collections.batches).doc(fromBatchId).get();
+        const [fromBatchDoc, toBatchDoc] = await Promise.all([
+            db.collection(config.collections.batches).doc(fromBatchId).get(),
+            db.collection(config.collections.batches).doc(toBatchId).get()
+        ]);
+
         if (!fromBatchDoc.exists) {
             return res.json({ message: "Source batch not found" });
         }
 
-        // Get target batch
-        const toBatchDoc = await db.collection(config.collections.batches).doc(toBatchId).get();
         if (!toBatchDoc.exists) {
             return res.json({ message: "Target batch not found" });
         }
 
         const fromBatchData = fromBatchDoc.data();
         const toBatchData = toBatchDoc.data();
+        const fromStudentIds = Array.isArray(fromBatchData.studentIds) ? fromBatchData.studentIds : [];
 
         // Check if target batch is full
         const toStudentIds = Array.isArray(toBatchData.studentIds) ? toBatchData.studentIds : [];
-        if (toStudentIds.length >= 24) {
-            return res.json({ message: "Target batch is full (24 students max)" });
+        if (!fromStudentIds.includes(studentId)) {
+            return res.json({ message: "Student not found in source batch" });
         }
 
-        // Remove from source batch
-        const fromStudentIds = (Array.isArray(fromBatchData.studentIds) ? fromBatchData.studentIds : [])
-            .filter(sId => sId !== studentId);
+        if (toStudentIds.length >= 40) {
+            return res.json({ message: "Target batch is full (40 students max)" });
+        }
 
-        await db.collection(config.collections.batches).doc(fromBatchId).update({
-            studentIds: fromStudentIds,
-            modifiedDateTime: getFormattedTime()
+        const formattedTime = getFormattedTime();
+        const batch = db.batch();
+
+        batch.update(fromBatchDoc.ref, {
+            studentIds: admin.firestore.FieldValue.arrayRemove(studentId),
+            modifiedDateTime: formattedTime
         });
 
-        // Add to target batch
-        const newToStudentIds = [...toStudentIds, studentId];
-        await db.collection(config.collections.batches).doc(toBatchId).update({
-            studentIds: newToStudentIds,
-            modifiedDateTime: getFormattedTime()
+        batch.update(toBatchDoc.ref, {
+            studentIds: admin.firestore.FieldValue.arrayUnion(studentId),
+            modifiedDateTime: formattedTime
         });
 
-        // Get student details
-        const studentDoc = await db.collection(config.collections.studentDetailsActiveStatus).doc(studentId).get();
-        const studentDetails = studentDoc.exists ? (studentDoc.data().studentDetails || '') : '';
+        await batch.commit();
+
+        const studentDetailsById = await getStudentDetailsById([studentId]);
+        const studentDetails = studentDetailsById.get(studentId) || studentId;
 
         await insertAuditDetailsBatch(req, [
             {

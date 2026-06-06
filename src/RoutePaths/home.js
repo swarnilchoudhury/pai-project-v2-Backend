@@ -6,6 +6,17 @@ const { db, currentTime } = require('../credentials/firebaseCredentials');
 const { insertAuditDetails, insertAuditDetailsBatch, adminRole, sendQueueWorkerMessage } = require('../commonFunctions');
 const { adminOnly } = require('../authMiddleware');
 
+const getStudentCodeSnapshots = (studentCode) => Promise.all([
+    db.collection(config.collections.studentDetailsActiveStatus)
+        .where('studentCode', '==', studentCode)
+        .limit(1)
+        .get(),
+    db.collection(config.collections.studentDetailsApprovalStatus)
+        .where('studentCode', '==', studentCode)
+        .limit(1)
+        .get()
+]);
+
 // Home Page to Fetch Details
 router.get("/home", async (req, res) => {
 
@@ -79,23 +90,11 @@ router.post("/searchCode", async (req, res) => {
             studentCode = "PAI-" + studentCode; // Append PAI
         }
 
-        // Validate in active state by Student Code
-        const activeDocRef = db.collection(config.collections.studentDetailsActiveStatus)
-            .where('studentCode', '==', studentCode)
-            .limit(1); // Limit to 1 document to improve performance
-
-        const activeDocSnapshot = await activeDocRef.get();
+        const [activeDocSnapshot, approvalDocSnapshot] = await getStudentCodeSnapshots(studentCode);
 
         if (!activeDocSnapshot.empty) { // Send Message if present in Active
             return res.json({ returnCode: 1, message: `${studentCode} already present in Active` });
         }
-
-        // Validate in approval state by Student Code
-        const approvalDocRef = db.collection(config.collections.studentDetailsApprovalStatus)
-            .where('studentCode', '==', studentCode)
-            .limit(1); // Limit to 1 document to improve performance
-
-        const approvalDocSnapshot = await approvalDocRef.get();
 
         if (!approvalDocSnapshot.empty) { // Send Message if present in Approval
             return res.json({ returnCode: 1, message: `${studentCode} already present in Approval` });
@@ -113,13 +112,18 @@ router.post("/searchCode", async (req, res) => {
 router.get("/latestCode", async (req, res) => {
 
     try {
-        const activeDocRef = db.collection(config.collections.studentDetailsActiveStatus).orderBy('studentCodeNumeric', 'desc').limit(1);
-        const activeDocSnapshot = await activeDocRef.get();
+        const [activeDocSnapshot, approveDocSnapshot] = await Promise.all([
+            db.collection(config.collections.studentDetailsActiveStatus)
+                .orderBy('studentCodeNumeric', 'desc')
+                .limit(1)
+                .get(),
+            db.collection(config.collections.studentDetailsApprovalStatus)
+                .orderBy('studentCodeNumeric', 'desc')
+                .limit(1)
+                .get()
+        ]);
 
         let activeLatestStudentCode = activeDocSnapshot.docs.length > 0 ? activeDocSnapshot.docs[0].data().studentCode : "Empty";
-
-        const approveDocRef = db.collection(config.collections.studentDetailsApprovalStatus).orderBy('studentCodeNumeric', 'desc').limit(1);
-        const approveDocSnapshot = await approveDocRef.get();
 
         let approveLatestStudentCode = approveDocSnapshot.docs.length > 0 ? approveDocSnapshot.docs[0].data().studentCode : "Empty";
 
@@ -136,29 +140,17 @@ router.post("/create", async (req, res) => {
     try {
         let { studentCode } = req.body; // Fetch Student Code from req body
 
-        let studentCodeNumeric = parseInt(studentCode);
+        let studentCodeNumeric = Number.parseInt(studentCode);
 
         if (!studentCode.includes("PAI")) {
             studentCode = "PAI-" + studentCode; // Append PAI
         }
 
-        // Validate in active state by Student Code
-        const activeDocRef = db.collection(config.collections.studentDetailsActiveStatus)
-            .where('studentCode', '==', studentCode)
-            .limit(1); // Limit to 1 document to improve performance
-
-        const activeDocSnapshot = await activeDocRef.get();
+        const [activeDocSnapshot, approvalDocSnapshot] = await getStudentCodeSnapshots(studentCode);
 
         if (!activeDocSnapshot.empty) { // Send Message if present in Active
             return res.json({ message: `${studentCode} already present in Active` });
         }
-
-        // Validate in approval state by Student Code
-        const approvalDocRef = db.collection(config.collections.studentDetailsApprovalStatus)
-            .where('studentCode', '==', studentCode)
-            .limit(1); // Limit to 1 document to improve performance
-
-        const approvalDocSnapshot = await approvalDocRef.get();
 
         if (!approvalDocSnapshot.empty) { // Send Message if present in Approval
             return res.json({ message: `${studentCode} already present in Approval` });
@@ -221,32 +213,23 @@ router.post("/create", async (req, res) => {
         const documentId = uuidv4(); // Generate UUID
         const docRef = db.collection(collectionName).doc(documentId);
 
-        // Write the document to the database
         await docRef.set(document);
 
-        // Confirm the document was written successfully
-        const docSnapshot = await docRef.get();
+        let message = '';
+        let auditMessage = '';
 
-        if (docSnapshot.exists) {
-
-            let message = '';
-            let auditMessage = '';
-
-            if (adminRole(req)) { // Admin role
-                message = `${studentCode} has been created`;
-                auditMessage = 'Created in Active State';
-            }
-            else {
-                message = `${studentCode} has been sent for approval`;
-                auditMessage = 'Sent in Approval State';
-            }
-
-            await insertAuditDetails(req, auditMessage, documentId, studentDetails);
-
-            return res.json({ message });
-        } else {
-            return res.json({ message: 'Failed to write document' });
+        if (adminRole(req)) { // Admin role
+            message = `${studentCode} has been created`;
+            auditMessage = 'Created in Active State';
         }
+        else {
+            message = `${studentCode} has been sent for approval`;
+            auditMessage = 'Sent in Approval State';
+        }
+
+        await insertAuditDetails(req, auditMessage, documentId, studentDetails);
+
+        return res.json({ message });
     } catch {
         return res.sendStatus(400);
     }
@@ -326,11 +309,12 @@ router.post("/update", adminOnly, async (req, res) => {
 
                 const activeDocSnapshot = await newDocumentRef.get();
 
-                if (!activeDocSnapshot.empty) { // If Exists then don't update
-                    message += `${studentCode} `;
-                }
-                else { // Update the details
+                if (activeDocSnapshot.empty) { // Update the details
                     await UpdateDetails(currentDocRef, newDocRef, documentId, status, studentCode);
+
+                }
+                else { // If Exists then don't update
+                    message += `${studentCode} `;
                 }
 
             } else { // Update the details
@@ -342,13 +326,14 @@ router.post("/update", adminOnly, async (req, res) => {
 
         if (deactivatedStudentIds.length > 0) {
             await sendQueueWorkerMessage({
-                eventType: "UpdateStudent",
-                action: "RemoveStudentFromBatches",
-                studentIds: deactivatedStudentIds
+                eventType: "RemoveStudentFromBatch",
+                studentIds: deactivatedStudentIds,
+                user: req.Name ? req.Name.toUpperCase() : "-",
+                auditDetails: auditDetails
             });
+        } else {
+            await insertAuditDetailsBatch(req, auditDetails);
         }
-
-        await insertAuditDetailsBatch(req, auditDetails);
 
         if (message) {
             return res.status(200).json({ message: `${message} already present in Active Status` });
@@ -423,23 +408,55 @@ router.put("/updateStudent", async (req, res) => {
         }
 
         if (updateForm.studentName && updateForm.studentName !== '') {
-            const studentDetails = newUpdateForm.studentName + " - " + oldData.studentCode;
-            await docRef.update({ ...newUpdateForm, studentDetails: studentDetails, modifiedBy: modifiedByName, modifiedDateTimeFormatted: modifiedDateTimeFormat });
+
+            const studentDetails =
+                newUpdateForm.studentName +
+                " - " +
+                oldData.studentCode;
+
+            await docRef.update({
+                ...newUpdateForm,
+                studentDetails,
+                modifiedBy: modifiedByName,
+                modifiedDateTimeFormatted: modifiedDateTimeFormat
+            });
 
             if (status === 1 || status === 2) {
-                let paymentRef = db.collection(config.collections.studentDetailsPayment).doc(updateForm.id);
+
+                let paymentRef = db
+                    .collection(config.collections.studentDetailsPayment)
+                    .doc(updateForm.id);
+
                 const paymentDoc = await paymentRef.get();
+
                 if (paymentDoc.exists) {
-                    await paymentRef.update({ studentName: updateForm.studentName });
+                    await paymentRef.update({
+                        studentName: newUpdateForm.studentName,
+                        studentDetails
+                    });
                 }
             }
 
-            insertAuditDetails(req, auditMessage, updateForm.id, studentDetails, true);
-
+            await insertAuditDetails(
+                req,
+                auditMessage,
+                updateForm.id,
+                studentDetails,
+                true
+            );
         }
         else {
-            await docRef.update({ ...newUpdateForm, modifiedBy: modifiedByName, modifiedDateTimeFormatted: modifiedDateTimeFormat });
-            insertAuditDetails(req, auditMessage, updateForm.id);
+            await docRef.update({
+                ...newUpdateForm,
+                modifiedBy: modifiedByName,
+                modifiedDateTimeFormatted: modifiedDateTimeFormat
+            });
+
+            await insertAuditDetails(
+                req,
+                auditMessage,
+                updateForm.id
+            );
         }
 
         let jsonMessage = `Successfully Updated For ${oldData.studentName}`;
@@ -483,42 +500,44 @@ router.post("/deleteStudent", async (req, res) => {
             status = 'Approval';
         }
 
+        const deletePromises = [];
         if (status === 'Active') {
             let docRef = db.collection(config.collections.studentDetailsActiveStatus).doc(id);
 
             const docSnapshot = await docRef.get();
             docData = docSnapshot.data();
 
-            await db.collection(config.collections.studentDetailsDelete).doc(id).set(docData);
-            await docRef.delete();
+            deletePromises.push(
+                db.collection(config.collections.studentDetailsDelete).doc(id).set(docData),
+                docRef.delete()
+            );
 
             systemComments = 'Deleted from Active Status and moved to deleted';
         }
         else if (status === 'Deactive') {
             let docRef = db.collection(config.collections.studentDetailsDeactiveStatus).doc(id);
-            const docSnapshot = await docRef.get();
-            docData = docSnapshot.data();
-            await docRef.delete();
+            deletePromises.push(docRef.delete());
 
             systemComments = 'Deleted from Deactive Status';
         }
         else {
             let docRef = db.collection(config.collections.studentDetailsApprovalStatus).doc(id);
-            const docSnapshot = await docRef.get();
-            docData = docSnapshot.data();
-            await docRef.delete();
+            deletePromises.push(docRef.delete());
 
             systemComments = 'Deleted from Approval Status';
         }
 
-        await sendQueueWorkerMessage({
-            eventType: "UpdateStudent",
-            action: "RemoveStudentFromBatches",
-            studentId: id,
-            status: "delete"
-        });
+        deletePromises.push(
+            sendQueueWorkerMessage({
+                eventType: "RemoveStudentFromBatch",
+                studentId: id,
+                user: req.Name ? req.Name.toUpperCase() : "-",
+                systemComments: systemComments,
+                documentId: id
+            })
+        );
 
-        await insertAuditDetails(req, systemComments, id);
+        await Promise.all(deletePromises);
 
         return res.sendStatus(200);
     }
@@ -529,3 +548,5 @@ router.post("/deleteStudent", async (req, res) => {
 });
 
 module.exports = router;
+
+
