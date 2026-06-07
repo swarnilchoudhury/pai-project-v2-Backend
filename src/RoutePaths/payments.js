@@ -292,6 +292,23 @@ router.post("/monthlyPayments", async (req, res) => {
 
             try {
                 const indexDocRef = db.collection(config.collections.monthlyPaymentDetails).doc(month);
+                const indexDoc = await indexDocRef.get();
+
+                if (!indexDoc.exists) {
+                    const activeStudentsSnapshot = await db
+                        .collection(config.collections.studentDetailsActiveStatus)
+                        .orderBy("studentName", "asc")
+                        .select("studentName", "studentCode")
+                        .get();
+
+                    let activeStudentsArray = activeStudentsSnapshot.docs.map(doc => ({
+                        studentCode: doc.data().studentCode,
+                        studentName: doc.data().studentName
+                    }));
+
+                    return res.status(200).json(activeStudentsArray);
+                }
+
                 const notGivenCollRef = indexDocRef.collection("notGiven");
                 const notGivenSnapshot = await notGivenCollRef.get();
 
