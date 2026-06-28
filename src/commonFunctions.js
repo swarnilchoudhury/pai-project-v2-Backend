@@ -1,5 +1,11 @@
-const { db, admin, currentTime } = require("./credentials/firebaseCredentials");
 const config = require('../config/config.json')
+const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
+
+const sqsClient = new SQSClient({
+    region: process.env.AWS_REGION_KEY || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-south-1"
+});
+
+const queueWorkerUrl = process.env.SQS_QUEUE_URL;
 
 const insertAuditDetails = async (
     req,
@@ -9,52 +15,38 @@ const insertAuditDetails = async (
     isUpdate = false,
     collectionName = null
 ) => {
-    try {
-        // Create timestamp for the document
-        const updatedDateTimeFormat = new Date().toLocaleString("en-US", {
-            timeZone: "Asia/Kolkata",
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit"
-        });
-
-        // Define the new audit entry
-        const newAuditEntry = {
+    await insertAuditDetailsBatch(req, [
+        {
             systemComments,
-            user: req.Name ? req.Name.toUpperCase() : "-",
-            updatedDateTime: updatedDateTimeFormat
-        };
-
-        // Use provided collection name if passed; fallback to student audit collection
-        const collection = collectionName || config.collections.studentDetailsAudit;
-        const auditDocRef = db.collection(collection).doc(documentId);
-
-        // Fetch the current audit document
-        const auditDocSnapshot = await auditDocRef.get();
-
-        if (!isUpdate && studentDetails !== null) {
-            studentDetails = auditDocSnapshot.data()?.studentDetails || studentDetails // Set studentDetails if it doesn't exist
+            documentId,
+            studentDetails,
+            isUpdate,
+            collectionName
         }
+    ]);
+};
 
-        const auditData = {
-            audits: admin.firestore.FieldValue.arrayUnion(newAuditEntry),
-            createdDateTime: auditDocSnapshot.data()?.createdDateTime || currentTime,
-            ...(
-                studentDetails !== null &&
-                studentDetails !== undefined &&
-                studentDetails !== '' && { studentDetails }
-            )
-        };
+const insertAuditDetailsBatch = async (req, auditDetails = []) => {
+    const user = req.Name ? req.Name.toUpperCase() : "-";
+    const normalizedAuditDetails = auditDetails
+        .filter((auditDetail) => auditDetail && auditDetail.documentId)
+        .map((auditDetail) => ({
+            systemComments: auditDetail.systemComments || '',
+            documentId: auditDetail.documentId,
+            studentDetails: auditDetail.studentDetails ?? '',
+            isUpdate: auditDetail.isUpdate || false,
+            collectionName: auditDetail.collectionName || config.collections.studentDetailsAudit
+        }));
 
-        // Update or create the audit document
-        await auditDocRef.set(auditData, { merge: true });
-
-    } catch {
-        throw new Exception();
+    if (normalizedAuditDetails.length === 0) {
+        return;
     }
+
+    await sendQueueWorkerMessage({
+        eventType: "InsertAuditDetails",
+        user,
+        auditDetails: normalizedAuditDetails
+    });
 };
 
 const adminRole = (req) => {
@@ -72,4 +64,21 @@ const adminRole = (req) => {
 };
 
 
-module.exports = { insertAuditDetails, adminRole }
+const sendQueueWorkerMessage = async (message) => {
+    if (!queueWorkerUrl) {
+        console.warn("SQS_QUEUE_URL is not configured. QueueWorker message skipped.");
+        return;
+    }
+
+    try {
+        await sqsClient.send(new SendMessageCommand({
+            QueueUrl: queueWorkerUrl,
+            MessageBody: JSON.stringify(message)
+        }));
+    } catch (error) {
+        console.error("Error sending QueueWorker message:", error);
+    }
+};
+
+
+module.exports = { insertAuditDetails, insertAuditDetailsBatch, adminRole, sendQueueWorkerMessage }

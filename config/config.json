@@ -9,6 +9,7 @@
         "studentDetailsPayment": "student_details_payment",
         "monthlyPaymentDetails": "monthly_payment_details",
         "totalMonthlyAmountDetails": "total_monthly_amount_details",
+        "monthlyPaymentStatusIndex": "monthly_payment_status_index",
         "teacherDetails": "teacher_details",
         "teacherDetailsAudit": "teacher_details_audit",
         "batches": "batches",
