@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node api.js",
+    "start": "node --env-file=.env local-server.js",
     "build": "echo 'No build step defined'"
   },
   "author": "Swarnil",
@@ -14,9 +14,9 @@
     "@aws-sdk/client-sqs": "^3.1053.0",
     "express": "^4.19.2",
     "firebase-admin": "^12.1.1",
-    "netlify-lambda": "^2.0.16",
     "path": "^0.12.7",
     "serverless-http": "^3.2.0",
+    "swagger-ui-express": "^5.0.1",
     "uuid": "^10.0.0"
   }
 }
