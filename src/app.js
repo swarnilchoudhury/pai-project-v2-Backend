@@ -5,6 +5,7 @@ const homeRouter = require("./RoutePaths/home");
 const paymentsRouter = require("./RoutePaths/payments");
 const permissionsRouter = require("./RoutePaths/permissions");
 const batchesRouter = require("./RoutePaths/batches");
+const auditsRouter = require("./RoutePaths/audits");
 const { verifyIdToken } = require("./authMiddleware");
 const swaggerDocument = require("./swagger");
 
@@ -44,5 +45,6 @@ app.use("/api/", homeRouter);
 app.use("/api/", permissionsRouter);
 app.use("/api/", paymentsRouter);
 app.use("/api/", batchesRouter);
+app.use("/api/", auditsRouter);
 
 module.exports = app;

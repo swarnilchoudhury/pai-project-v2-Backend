@@ -68,6 +68,8 @@ The application API prefix is `<AWS_API_BASE_URL>/api`. Every endpoint below req
 | POST | `/update` | Admin | Move students; header `x-update`, body `data` array |
 | PUT | `/updateStudent` | User | Edit `updateForm`; non-admin is restricted to approval records |
 | POST | `/studentAudit` | User | Audit history by `id` |
+| GET | `/audits` | User | User-side audit history from the last 30 days, latest first |
+| POST | `/audits/clear` | User | Deletes audit records older than 30 days, normalizes retained records to `title`, `user`, `dateTime`, and returns `Clear Started` |
 | POST | `/deleteStudent` | User | Delete by `id` and lifecycle `status` |
 | POST | `/paymentsViews` | Admin | Eligible/unpaid students for `month` |
 | POST | `/createPayments` | Admin | Queue payments: student IDs, amount, mode, month, date |
@@ -81,6 +83,7 @@ The application API prefix is `<AWS_API_BASE_URL>/api`. Every endpoint below req
 | GET | `/batches/students/:batchId` | Admin | Students in one batch |
 | POST | `/batches/audit` | Admin | Batch audit by `batchId` |
 | GET | `/batches/availableStudents` | Admin | Active students not in another batch |
+| POST | `/batches/searchStudents` | Admin | Find selected active students' current batch details by `studentIds`; unassigned students return `N/A` batch fields |
 | POST | `/batches/create` | Admin | Create batch (name, day, slot, teacher IDs) |
 | PUT | `/batches/addStudent/:batchId` | Admin | Add student IDs; maximum batch size is 40 |
 | POST | `/batches/students/delete` | Admin | Remove student from a batch by `id` |
@@ -95,7 +98,7 @@ Swagger contains example JSON request bodies for all body-based endpoints.
 
 ## Data and asynchronous work
 
-Firestore collection names live in `config/config.json`. Student records are separated into active, deactive, approval, and deleted collections. Payments are stored per student and also denormalized into monthly `given`/`notGiven` indexes and monthly total documents. Separate audit collections retain change history.
+Firestore collection names live in `config/config.json`. Student records are separated into active, deactive, approval, and deleted collections. Payments are stored per student and also denormalized into monthly `given`/`notGiven` indexes and monthly total documents. Separate per-record audit collections retain change history. The `audit_history_all` collection stores only the global Audits page fields: `title`, `user`, and `dateTime`; the API reads only the last 30 days.
 
 The API uses SQS for audit insertion, bulk payment creation, payment-total adjustments, and removing deactivated/deleted students from batches. If `SQS_QUEUE_URL` is absent, the API logs a warning and skips the message; the HTTP call may still succeed, so production monitoring should watch for this warning.
 

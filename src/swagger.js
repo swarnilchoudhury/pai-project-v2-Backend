@@ -52,6 +52,7 @@ const swaggerDocument = {
         { name: "System", description: "Service health" },
         { name: "Authentication", description: "Authenticated user details and permissions" },
         { name: "Students", description: "Student lifecycle and audit history" },
+        { name: "Audits", description: "Global user-side audit history" },
         { name: "Payments", description: "Admin-only payment operations" },
         { name: "Batches", description: "Admin-only batch operations" },
         { name: "Teachers", description: "Admin-only teacher operations" }
@@ -78,6 +79,8 @@ const swaggerDocument = {
         "/api/updateStudent": { put: operation("Students", "Edit a student's details", { body: objectSchema({ updateForm: objectSchema({ id: string("student-id"), ...studentFields }, ["id"]), status: { type: "integer", enum: [1, 2, 3], description: "1 active, 2 deactive, 3 approval" } }, ["updateForm", "status"]) }) },
         "/api/studentAudit": { post: operation("Students", "Get a student's audit history", { body: idBody() }) },
         "/api/deleteStudent": { post: operation("Students", "Delete a student", { body: objectSchema({ id: string("student-id"), status: { type: "string", enum: ["Active", "Deactive", "Approval"] } }, ["id", "status"]) }) },
+        "/api/audits": { get: operation("Audits", "List user-side audit history from the last 30 days, latest first") },
+        "/api/audits/clear": { post: operation("Audits", "Clear audit history older than 30 days", { success: "Clear Started" }) },
 
         "/api/paymentsViews": { post: operation("Payments", "List students still eligible for payment in a month", { body: objectSchema({ month: string("July_2026") }, ["month"]) }) },
         "/api/createPayments": { post: operation("Payments", "Queue payment creation for one or more students", { body: objectSchema({ studentIds: stringArray(["student-id"]), amount: { type: "number", example: 500 }, modeOfPayment: string("Bank"), month: string("July_2026"), paymentDate: string("2026-07-02") }, ["studentIds", "amount", "modeOfPayment", "month"]) }) },
@@ -92,6 +95,7 @@ const swaggerDocument = {
         "/api/batches/students/{batchId}": { get: operation("Batches", "List students in a batch", { parameters: [{ in: "path", name: "batchId", required: true, schema: { type: "string" } }] }) },
         "/api/batches/audit": { post: operation("Batches", "Get a batch's audit history", { body: idBody("batchId") }) },
         "/api/batches/availableStudents": { get: operation("Batches", "List active students not assigned to a batch") },
+        "/api/batches/searchStudents": { post: operation("Batches", "Find selected students' current batch details", { description: "Returns selected active students. Batch fields are N/A when the student is not assigned to a batch.", body: objectSchema({ studentIds: stringArray(["student-id-1", "student-id-2"]) }, ["studentIds"]) }) },
         "/api/batches/create": { post: operation("Batches", "Create a batch", { body: objectSchema({ batchName: string("MORNING A"), day: string("Monday"), timeSlot: string("09:00-10:00"), teacherIds: stringArray(["teacher-id"]) }, ["batchName", "day", "timeSlot", "teacherIds"]) }) },
         "/api/batches/addStudent/{batchId}": { put: operation("Batches", "Add students to a batch", { parameters: [{ in: "path", name: "batchId", required: true, schema: { type: "string" } }], body: objectSchema({ studentIds: stringArray(["student-id-1", "student-id-2"]) }, ["studentIds"]) }) },
         "/api/batches/students/delete": { post: operation("Batches", "Remove a student from their batch", { body: idBody() }) },
