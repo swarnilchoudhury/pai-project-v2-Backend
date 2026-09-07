@@ -176,6 +176,77 @@ router.get("/batches/availableStudents", async (req, res) => {
     }
 });
 
+router.post("/batches/searchStudents", async (req, res) => {
+    try {
+        const { studentIds } = req.body;
+
+        if (!Array.isArray(studentIds) || studentIds.length === 0) {
+            return res.json({ message: "studentIds must be a non-empty array" });
+        }
+
+        const uniqueStudentIds = [...new Set(studentIds.filter(Boolean))];
+        const [batchesSnapshot, studentDocs] = await Promise.all([
+            db.collection(config.collections.batches).get(),
+            db.getAll(
+                ...uniqueStudentIds.map((studentId) =>
+                    db.collection(config.collections.studentDetailsActiveStatus).doc(studentId)
+                )
+            )
+        ]);
+
+        const activeStudentsById = new Map();
+        studentDocs.forEach((studentDoc) => {
+            if (studentDoc.exists) {
+                activeStudentsById.set(studentDoc.id, studentDoc.data());
+            }
+        });
+
+        const batchByStudentId = new Map();
+        batchesSnapshot.docs.forEach((batchDoc) => {
+            const batchData = batchDoc.data();
+            const batchStudentIds = Array.isArray(batchData.studentIds) ? batchData.studentIds : [];
+
+            batchStudentIds.forEach((studentId) => {
+                if (uniqueStudentIds.includes(studentId)) {
+                    batchByStudentId.set(studentId, {
+                        batchId: batchDoc.id,
+                        batchName: batchData.batchName || '',
+                        day: batchData.day || '',
+                        timeSlot: batchData.timeSlot || ''
+                    });
+                }
+            });
+        });
+
+        const searchResults = uniqueStudentIds
+            .filter((studentId) => activeStudentsById.has(studentId))
+            .map((studentId) => {
+                const studentData = activeStudentsById.get(studentId);
+                const batchData = batchByStudentId.get(studentId);
+
+                return {
+                    id: studentId,
+                    studentName: studentData.studentName || studentData.studentDetails || studentId,
+                    studentCode: studentData.studentCode || 'N/A',
+                    studentDetails: studentData.studentDetails || studentId,
+                    batchId: batchData?.batchId || 'N/A',
+                    batchName: batchData?.batchName || 'N/A',
+                    day: batchData?.day || 'N/A',
+                    timeSlot: batchData?.timeSlot || 'N/A'
+                };
+            });
+
+        searchResults.sort((a, b) =>
+            (a.studentName || '').localeCompare(b.studentName || '')
+            || (a.batchName || '').localeCompare(b.batchName || '')
+        );
+
+        return res.json(searchResults);
+    } catch {
+        return res.sendStatus(400);
+    }
+});
+
 router.post("/batches/create", async (req, res) => {
     try {
         const { batchName, day, timeSlot, teacherIds } = req.body;

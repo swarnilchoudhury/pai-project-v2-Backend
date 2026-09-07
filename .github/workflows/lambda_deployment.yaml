@@ -20,26 +20,22 @@ jobs:
           node-version: 20
 
       - name: Install Dependencies
-        run: npm install --production
+        run: npm ci --omit=dev
 
-      - name: Create Lambda Entry Point
+      - name: Validate Lambda Entry Point
         run: |
-          cat netlify/functions/api.js \
-            | sed 's|../../src|./src|g' \
-            | sed 's|../../config|./config|g' \
-            > index.js
+          node --check index.js
+          node --check src/app.js
 
       - name: Create Deployment Package
         run: |
-          zip -r code.zip . \
-            -x ".git/*" \
-            ".github/*" \
-            "netlify/*" \
-            "netlify.toml" \
-            "*.md" \
-            ".gitignore" \
-            ".env*" \
-            "deno.lock"
+          zip -r code.zip \
+            index.js \
+            src \
+            config \
+            node_modules \
+            package.json \
+            package-lock.json
 
       - name: Set Lambda Function Name
         run: |
