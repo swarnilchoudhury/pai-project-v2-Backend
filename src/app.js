@@ -43,8 +43,8 @@ app.use(verifyIdToken);
 app.use("/api/", loginRouter);
 app.use("/api/", homeRouter);
 app.use("/api/", permissionsRouter);
+app.use("/api/", auditsRouter);
 app.use("/api/", paymentsRouter);
 app.use("/api/", batchesRouter);
-app.use("/api/", auditsRouter);
 
 module.exports = app;
